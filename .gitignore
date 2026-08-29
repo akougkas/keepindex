@@ -1,0 +1,31 @@
+.planning/
+
+# Dependencies
+node_modules/
+
+# Build and test output
+dist/
+playwright-report/
+test-results/
+
+# Persistent local database runtime files
+server/*.sqlite*
+
+# Bun
+bun.lockb
+
+# Editor
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+*.Zone.Identifier
+*:Zone.Identifier
+Zone.Identifier
+
+# Env
+.env
+.env.local
+.env.*.local

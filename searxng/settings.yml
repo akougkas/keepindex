@@ -1,0 +1,196 @@
+use_default_settings:
+  engines:
+    keep_only:
+      - google
+      - brave
+      - bing
+      - qwant
+      - duckduckgo
+      - mojeek
+      - startpage
+      - wikipedia
+      - github
+      - stackexchange
+      - arxiv
+      - youtube
+      - hackernews
+      - mastodon hashtags
+      - yahoo
+      - yep
+      - crowdview
+      - encyclosearch
+      - seznam
+      - dogpile
+      - mwmbl
+
+general:
+  debug: false
+  instance_name: "KeepIndex Local Search"
+
+search:
+  safe_search: 0
+  autocomplete: "google"
+  formats:
+    - html
+    - json
+  # One CAPTCHA darkened an engine for a full hour by default, which is why
+  # engines looked permanently dead when they were only intermittently
+  # challenged. Shorter cooldowns let a transient challenge clear sooner.
+  suspended_times:
+    SearxEngineAccessDenied: 120
+    SearxEngineCaptcha: 300
+    SearxEngineTooManyRequests: 120
+
+server:
+  port: 8080
+  bind_address: "0.0.0.0"
+  # This public placeholder protects no account or remote deployment. The
+  # bundled instance is loopback-only and has no authenticated sessions.
+  secret_key: "keepindex-loopback-session-placeholder"
+  limiter: false
+  image_proxy: true
+
+outgoing:
+  # HTTP/2 is disabled deliberately. httpx's HTTP/2 TLS fingerprint is what
+  # Brave and DuckDuckGo bot-detection flags: with it on, Brave answers 429
+  # "too many requests" and DuckDuckGo serves a CAPTCHA challenge page, while
+  # the identical query from the same container over HTTP/1.1 returns a normal
+  # 200 with full results. This is a client fingerprint problem, not an IP
+  # reputation problem.
+  enable_http2: false
+  # The 3s default cut off Google and Brave mid-response on this connection.
+  request_timeout: 6.0
+  max_request_timeout: 12.0
+  pool_connections: 100
+  pool_maxsize: 20
+
+engines:
+  - name: google
+    engine: google
+    shortcut: go
+    timeout: 6.0
+    disabled: false
+
+  - name: brave
+    engine: brave
+    shortcut: br
+    timeout: 6.0
+    disabled: false
+
+  - name: bing
+    engine: bing
+    shortcut: bi
+    timeout: 6.0
+    disabled: false
+
+  - name: qwant
+    engine: qwant
+    shortcut: qw
+    timeout: 6.0
+    disabled: false
+
+  - name: duckduckgo
+    engine: duckduckgo
+    shortcut: ddg
+    timeout: 6.0
+    disabled: false
+
+  # Independent crawler with no bot-detection challenge, added because Brave and
+  # DuckDuckGo refuse SearXNG's client from this connection (see docs).
+  - name: mojeek
+    engine: mojeek
+    shortcut: mjk
+    timeout: 6.0
+    disabled: false
+
+  - name: startpage
+    engine: startpage
+    shortcut: sp
+    timeout: 6.0
+    disabled: false
+
+  - name: wikipedia
+    engine: wikipedia
+    shortcut: wp
+    timeout: 5.0
+    disabled: false
+
+  - name: github
+    engine: github
+    shortcut: gh
+    categories: it
+    timeout: 6.0
+    disabled: false
+
+  - name: stackexchange
+    engine: stackexchange
+    shortcut: se
+    categories: it
+    timeout: 6.0
+    disabled: false
+
+  - name: arxiv
+    engine: arxiv
+    shortcut: ar
+    categories: science
+    timeout: 6.0
+    disabled: false
+
+  # No-key social and video providers. Reddit and X/Twitter have no working
+  # SearXNG engine any more (both removed public search access), so those are
+  # reached through site-scoped queries on the general engines instead.
+  - name: youtube
+    engine: youtube_noapi
+    shortcut: yt
+    categories: [videos, social]
+    timeout: 6.0
+    disabled: false
+
+  - name: hackernews
+    engine: hackernews
+    shortcut: hn
+    categories: [social, it]
+    timeout: 6.0
+    disabled: false
+
+
+  - name: mastodon hashtags
+    engine: mastodon
+    mastodon_type: hashtags
+    base_url: https://mastodon.social
+    shortcut: mah
+    categories: [social]
+    timeout: 6.0
+    disabled: false
+
+  - name: yahoo
+    timeout: 6.0
+    disabled: false
+
+  - name: yep
+    timeout: 6.0
+    disabled: false
+
+  - name: crowdview
+    timeout: 6.0
+    disabled: false
+
+  - name: encyclosearch
+    timeout: 6.0
+    disabled: false
+
+  - name: seznam
+    timeout: 6.0
+    disabled: false
+
+  - name: dogpile
+    timeout: 6.0
+    disabled: false
+
+  - name: mwmbl
+    timeout: 6.0
+    disabled: false
+
+  - name: wikidata
+    engine: wikidata
+    disabled: true

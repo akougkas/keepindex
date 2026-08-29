@@ -1,0 +1,15 @@
+# Optional, explicit local-knowledge access for the container.
+#
+# KeepIndex intentionally does not mount a home directory or vault by default.
+# Set KEEPINDEX_KNOWLEDGE_PATH to one selected host directory, then opt in with:
+#
+#   docker compose -f docker-compose.yml -f compose.override.example.yml up --build
+#
+# In the KeepIndex UI, index the container path /home/keepindex/knowledge.
+services:
+  keepindex:
+    volumes:
+      - type: bind
+        source: "${KEEPINDEX_KNOWLEDGE_PATH:?Set KEEPINDEX_KNOWLEDGE_PATH to an absolute host directory}"
+        target: /home/keepindex/knowledge
+        read_only: true

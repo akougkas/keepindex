@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <script>
+      (function(){
+        var stored=null;
+        try{
+          stored=localStorage.getItem('keepindex-theme');
+        }catch(e){
+          stored=null;
+        }
+        if(stored==='light')document.documentElement.classList.remove('dark');
+        else document.documentElement.classList.add('dark');
+      })();
+    </script>
+    <link rel="icon" type="image/svg+xml" href="/keepindex-icon.svg" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#071117" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#F2EFE6" media="(prefers-color-scheme: light)" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="application-name" content="KeepIndex" />
+    <meta name="description" content="KeepIndex is private, local-first federated search. Search your world. Keep it yours." />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="KeepIndex" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>KeepIndex — Search your world. Keep it yours.</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

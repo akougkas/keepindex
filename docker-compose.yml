@@ -1,0 +1,67 @@
+name: keepindex
+
+services:
+  keepindex:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: keepindex:local
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${KEEPINDEX_BIND_ADDRESS:-127.0.0.1}:${KEEPINDEX_PORT:-5173}:5173"
+    environment:
+      NODE_ENV: production
+      PORT: "5173"
+      KEEPINDEX_DB_PATH: /data/keepindex.sqlite
+      SEARXNG_URL: http://searxng:8080
+      # The production default remains 127.0.0.1:8080 outside Docker. A
+      # container reaches the same private host service through Docker's local
+      # host gateway; a private LLM_URL can override it explicitly.
+      LLM_URL: "${LLM_URL:-http://host.docker.internal:8080}"
+      LLM_MODEL: "${LLM_MODEL:-}"
+      LLM_FALLBACK_MODEL: "${LLM_FALLBACK_MODEL:-}"
+      KEEPINDEX_INFERENCE_PROVIDER: "${KEEPINDEX_INFERENCE_PROVIDER:-auto}"
+      KEEPINDEX_ALLOWED_ORIGINS: "${KEEPINDEX_ALLOWED_ORIGINS:-}"
+      KEEPINDEX_BROWSER_HISTORY_PATHS: "${KEEPINDEX_BROWSER_HISTORY_PATHS:-}"
+      KEEPINDEX_SEARCH_MAX_RETRIES: "${KEEPINDEX_SEARCH_MAX_RETRIES:-}"
+    volumes:
+      - keepindex-data:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      searxng:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - "const response = await fetch('http://127.0.0.1:5173/api/health'); if (!response.ok) process.exit(1)"
+      interval: 15s
+      timeout: 8s
+      retries: 5
+      start_period: 15s
+    stop_grace_period: 20s
+
+  searxng:
+    # Exact upstream release used for KeepIndex's container smoke test. The
+    # digest is its multi-architecture OCI index (amd64, arm64, arm/v7).
+    image: searxng/searxng:2026.8.28-a30b2d474@sha256:addd2cf36efb4b9815a2820a522aef7cce4da0d1c0e4527f6675f5663332fc9b
+    restart: unless-stopped
+    ports:
+      - "${KEEPINDEX_SEARXNG_BIND_ADDRESS:-127.0.0.1}:${KEEPINDEX_SEARXNG_PORT:-8888}:8080"
+    volumes:
+      - ./searxng:/etc/searxng:ro
+      - searxng-cache:/var/cache/searxng
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- 'http://127.0.0.1:8080/healthz' >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    stop_grace_period: 15s
+
+volumes:
+  keepindex-data:
+  searxng-cache:
