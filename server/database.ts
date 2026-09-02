@@ -133,6 +133,18 @@ export type QueryTimings = {
   endToEndMs: number | null
 }
 
+/**
+ * One measured phase in a query execution. Offsets make concurrent phases
+ * visible instead of implying that every duration is additive.
+ */
+export type QueryExecutionPhase = {
+  name: string
+  startedOffsetMs: number
+  durationMs: number
+  status: 'ok' | 'error' | 'aborted' | 'skipped'
+  detail: Record<string, string | number | boolean | null>
+}
+
 export type RetrievalOutcomeState =
   | 'ok'
   | 'no-results'
@@ -184,6 +196,7 @@ export type QueryRecord = {
   grounding: unknown | null
   metrics: QueryTokenMetrics
   timings: QueryTimings
+  executionTrace: QueryExecutionPhase[]
   retrievalDiagnostics: QueryRetrievalDiagnostics | null
   sourceCount: number
   candidateSourceCount: number | null
@@ -219,6 +232,7 @@ export type CompleteQueryRecordInput = {
   grounding?: unknown | null
   metrics?: Partial<QueryTokenMetrics> | null
   timings?: Partial<QueryTimings> | null
+  executionTrace?: QueryExecutionPhase[]
   retrievalDiagnostics?: QueryRetrievalDiagnostics | null
   sourceCount?: number
   candidateSourceCount?: number | null
@@ -342,7 +356,7 @@ const DEFAULT_JOURNAL_SIZE_LIMIT_BYTES = 64 * 1024 * 1024
 const DEFAULT_RETENTION_DAYS_MS = 180 * 24 * 60 * 60_000
 const DEFAULT_SOURCE_PACK: QuerySourcePack = { web: [], local: [] }
 
-export const LATEST_SCHEMA_VERSION = 5
+export const LATEST_SCHEMA_VERSION = 6
 
 const dynamicImport = Function('specifier', 'return import(specifier)') as (
   specifier: string
@@ -588,6 +602,14 @@ const migrations: Array<{ version: number; up: (db: SqliteDatabase) => void }> =
       `)
     },
   },
+  {
+    version: 6,
+    up(db) {
+      if (!hasColumn(db, 'query_records', 'execution_trace_json')) {
+        db.exec("ALTER TABLE query_records ADD COLUMN execution_trace_json TEXT NOT NULL DEFAULT '[]';")
+      }
+    },
+  },
 ]
 
 const requiredSchemaColumns: Record<string, string[]> = {
@@ -604,6 +626,7 @@ const requiredSchemaColumns: Record<string, string[]> = {
     'mode',
     'source_pack_json',
     'retrieval_diagnostics_json',
+    'execution_trace_json',
     'outcome',
     'started_at',
     'updated_at',
@@ -683,6 +706,7 @@ function mapQueryRecord(row: Row): QueryRecord {
       tokensPerSecond: nullableNumber(row.tokens_per_second),
       endToEndMs: nullableNumber(row.end_to_end_ms),
     },
+    executionTrace: parseJson<QueryExecutionPhase[]>(row.execution_trace_json, []),
     retrievalDiagnostics: parseJson<QueryRetrievalDiagnostics | null>(
       row.retrieval_diagnostics_json,
       null
@@ -1231,7 +1255,7 @@ export function createDatabaseService(options: DatabaseServiceOptions = {}) {
       db,
       `UPDATE query_records SET
          actual_model = ?, answer_text = ?, source_pack_json = ?, citation_ids_json = ?,
-         grounding_json = ?, prompt_tokens = ?, output_tokens = ?, total_tokens = ?,
+         grounding_json = ?, execution_trace_json = ?, prompt_tokens = ?, output_tokens = ?, total_tokens = ?,
          token_counts_estimated = ?, generation_ms = ?, time_to_first_token_ms = ?,
          tokens_per_second = ?, end_to_end_ms = ?, source_count = ?,
          candidate_source_count = ?, retrieval_diagnostics_json = ?, degraded = ?, outcome = ?, error = ?,
@@ -1243,6 +1267,7 @@ export function createDatabaseService(options: DatabaseServiceOptions = {}) {
       JSON.stringify(sourcePack),
       JSON.stringify(citationIds),
       grounding == null ? null : JSON.stringify(grounding),
+      JSON.stringify(input.executionTrace ?? existing.executionTrace),
       metrics.promptTokens ?? null,
       metrics.outputTokens ?? null,
       metrics.totalTokens ?? null,
@@ -1290,7 +1315,7 @@ export function createDatabaseService(options: DatabaseServiceOptions = {}) {
                 prompt_tokens, output_tokens, total_tokens, token_counts_estimated,
                 generation_ms, time_to_first_token_ms, tokens_per_second, end_to_end_ms,
                 source_count, candidate_source_count, retrieval_diagnostics_json,
-                degraded, outcome, error,
+                execution_trace_json, degraded, outcome, error,
                 started_at, completed_at, updated_at,
                 '' AS answer_text, '{"web":[],"local":[]}' AS source_pack_json,
                 '[]' AS citation_ids_json, NULL AS grounding_json

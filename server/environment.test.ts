@@ -38,5 +38,8 @@ describe('canonical KeepIndex environment contract', () => {
     expect(readKeepIndexEnvironment('CORPUS_MODEL', {
       KEEPINDEX_CORPUS_MODEL: 'current-model',
     })).toBe('current-model')
+    expect(readKeepIndexEnvironment('EMBEDDING_MODEL', {
+      KEEPINDEX_EMBEDDING_MODEL: 'text-embedding-nomic-embed-text-v2',
+    })).toBe('text-embedding-nomic-embed-text-v2')
   })
 })

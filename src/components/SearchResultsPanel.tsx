@@ -164,8 +164,8 @@ export function SearchResultsPanel() {
           ))}
           <div className="ml-auto flex items-center gap-2 px-1 font-mono text-[9px] uppercase tracking-[0.1em] text-muted-foreground">
             {searchMeta?.semantic.requested && (
-              <span className={cn('inline-flex items-center gap-1', searchMeta.semantic.mode === 'semantic-expansion' ? 'text-primary' : 'text-[oklch(0.68_0.13_75)]')}>
-                <BrainCircuit className="size-3" /> {searchMeta.semantic.mode === 'semantic-expansion' ? 'concept fused' : 'keyword fallback'}
+              <span className={cn('inline-flex items-center gap-1', searchMeta.semantic.mode === 'embedding-rerank' ? 'text-primary' : 'text-[oklch(0.68_0.13_75)]')}>
+                <BrainCircuit className="size-3" /> {searchMeta.semantic.mode === 'embedding-rerank' ? 'embedding reranked' : 'keyword fallback'}
               </span>
             )}
             <span className="inline-flex items-center gap-1"><ShieldCheck className="size-3" /> local-first</span>

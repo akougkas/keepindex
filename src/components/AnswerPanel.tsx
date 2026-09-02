@@ -13,7 +13,7 @@ import { KeyTakeaways } from '@/components/KeyTakeaways'
 import { AnswerRefinements } from '@/components/AnswerRefinements'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
-import { Bookmark, Copy, Check, Loader2, Pencil, MessageSquare, Pin, PinOff } from 'lucide-react'
+import { Activity, Bookmark, Copy, Check, CheckCircle2, Loader2, Pencil, MessageSquare, Pin, PinOff } from 'lucide-react'
 import { ThinkingVisualizer } from '@/components/ThinkingVisualizer'
 import { QueryVitals } from '@/components/QueryVitals'
 import { useSettingsStore } from '@/stores/settings-store'
@@ -244,6 +244,55 @@ function handleCitationClick(e: React.MouseEvent) {
   }
 }
 
+const PHASE_LABELS: Record<string, string> = {
+  request_accepted: 'Request accepted',
+  request_setup: 'Settings resolved',
+  query_record_start: 'Evidence ledger opened',
+  knowledge_load: 'Local index ready',
+  query_planning: 'Retrieval plan ready',
+  local_retrieval: 'Local knowledge searched',
+  embedding_rerank: 'Local evidence embedding-reranked',
+  history_retrieval: 'Private history searched',
+  web_retrieval: 'Web search completed',
+  ranking_and_fusion: 'Evidence ranked and fused',
+  web_hydration: 'Primary sources hydrated',
+  prompt_assembly: 'Grounded prompt assembled',
+}
+
+function RetrievalProgress() {
+  const progress = useAppStore((state) => state.answerProgress)
+  const visible = progress.filter((phase) => phase.status !== 'skipped').slice(-5)
+  const latest = visible[visible.length - 1]
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-primary/20 bg-card/55">
+      <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-primary">
+        <Activity className="size-3.5" />
+        {latest ? PHASE_LABELS[latest.phase] ?? latest.phase.replace(/_/g, ' ') : 'Starting retrieval'}
+        <Loader2 className="ml-auto size-3 animate-spin" />
+      </div>
+      <div className="space-y-1 px-3 py-2.5" aria-live="polite">
+        {visible.length === 0 ? (
+          <p className="font-mono text-[11px] text-muted-foreground">Opening private execution trace…</p>
+        ) : visible.map((phase, index) => (
+          <motion.div
+            key={`${phase.phase}-${phase.elapsedMs}-${index}`}
+            initial={{ opacity: 0, x: -4 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="flex items-center gap-2 font-mono text-[11px] text-muted-foreground"
+          >
+            <CheckCircle2 className="size-3 shrink-0 text-primary/70" />
+            <span className="truncate">{PHASE_LABELS[phase.phase] ?? phase.phase.replace(/_/g, ' ')}</span>
+            <span className="ml-auto shrink-0 tabular-nums text-foreground/55">
+              {phase.durationMs >= 1000 ? `${(phase.durationMs / 1000).toFixed(1)}s` : `${phase.durationMs}ms`}
+            </span>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function AnswerPanel() {
   const answer = useAppStore((s) => s.answer)
   const thinking = useAppStore((s) => s.thinking)
@@ -252,6 +301,7 @@ export function AnswerPanel() {
   const error = useAppStore((s) => s.error)
   const mode = useAppStore((s) => s.mode)
   const showThinking = useSettingsStore((s) => s.showThinking)
+  const answerProgress = useAppStore((s) => s.answerProgress)
 
   if (error && mode === 'ai') {
     return (
@@ -263,12 +313,15 @@ export function AnswerPanel() {
 
   if (isLoading && !answer && !thinking) {
     return (
-      <div className="space-y-3">
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-4/5" />
-        <Skeleton className="h-4 w-3/5" />
-        <Skeleton className="h-20 w-full" />
-        <Skeleton className="h-4 w-2/3" />
+      <div className="space-y-4">
+        <RetrievalProgress />
+        {answerProgress.length < 2 && (
+          <div className="space-y-3 opacity-60">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-4/5" />
+            <Skeleton className="h-4 w-3/5" />
+          </div>
+        )}
       </div>
     )
   }

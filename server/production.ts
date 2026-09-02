@@ -9,6 +9,7 @@ declare const Bun: {
     hostname: string
     port: number
     maxRequestBodySize: number
+    idleTimeout: number
     fetch(request: Request): Response | Promise<Response>
     error(error: Error): Response
   }): { hostname: string; port: number }
@@ -100,6 +101,11 @@ const server = Bun.serve({
   // Hono returns the stable JSON 413 shape; this matching transport cap keeps a
   // production socket from buffering beyond the same public API budget first.
   maxRequestBodySize: API_REQUEST_BODY_LIMIT_BYTES,
+  // Bun defaults idle sockets to 10 seconds. Citation repair and a busy local
+  // inference server can legitimately produce no SSE bytes for longer than
+  // that after the answer has streamed, which otherwise truncates HTTP chunked
+  // encoding in the browser. Bun's supported maximum covers our 180s LLM wait.
+  idleTimeout: 255,
   fetch(request) {
     const pathname = new URL(request.url).pathname
     if (pathname === '/api' || pathname.startsWith('/api/')) return app.fetch(request)

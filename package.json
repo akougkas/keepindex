@@ -30,6 +30,7 @@
     "typecheck": "tsc -b",
     "test": "bun test server src cli",
     "test:corpus": "bun scripts/run-correctness-corpus.ts",
+    "profile:live": "bun scripts/profile-live-queries.ts",
     "test:e2e": "bash ./scripts/test-e2e.sh",
     "build": "tsc -b && vite build",
     "brand:generate": "bash ./scripts/generate-brand-assets.sh",

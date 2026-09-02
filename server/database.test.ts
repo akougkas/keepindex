@@ -202,6 +202,13 @@ describe('query records', () => {
       outcome: 'succeeded',
       actualModel: 'fallback-model',
       answerText: 'WAL appends changes before checkpointing [1].',
+      executionTrace: [{
+        name: 'local_retrieval',
+        startedOffsetMs: 20,
+        durationMs: 30,
+        status: 'ok',
+        detail: { candidates: 2 },
+      }],
       sourcePack: {
         web: [{ title: 'Write-Ahead Logging', url: 'https://sqlite.org/wal.html', snippet: 'WAL.' }],
         local: [{ filePath: '/vault/sqlite.md', content: 'Checkpoint notes.', startLine: 4, endLine: 8 }],
@@ -311,6 +318,13 @@ describe('query records', () => {
     })
     expect(record?.sourcePack.web).toHaveLength(1)
     expect(record?.sourcePack.local).toHaveLength(1)
+    expect(record?.executionTrace).toEqual([{
+      name: 'local_retrieval',
+      startedOffsetMs: 20,
+      durationMs: 30,
+      status: 'ok',
+      detail: { candidates: 2 },
+    }])
 
     const summaries = await service.listQueryRecords()
     expect(summaries).toHaveLength(1)

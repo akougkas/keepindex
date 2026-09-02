@@ -94,8 +94,17 @@ export type ResearchStep = {
 
 type RequestEvent<Type extends string, Data = unknown> = JsonSseEvent<Type, Data>
 
+export type AnswerProgress = {
+  phase: string
+  status: 'ok' | 'error' | 'aborted' | 'skipped'
+  elapsedMs: number
+  durationMs: number
+  detail: Record<string, string | number | boolean | null>
+}
+
 type AnswerStreamEvent =
   | RequestEvent<'error', string>
+  | RequestEvent<'progress', AnswerProgress>
   | RequestEvent<'sources', { web?: Source[]; local?: KnowledgeSource[] }>
   | RequestEvent<'thinking_delta', string>
   | RequestEvent<'delta', string>
@@ -143,7 +152,7 @@ export type FederatedSearchMeta = {
   available: { web: number; local: number; history: number }
   semantic: {
     requested: boolean
-    mode: 'semantic-expansion' | 'keyword'
+    mode: 'embedding-rerank' | 'keyword'
     queries: string[]
     warning?: string
   }
@@ -152,6 +161,7 @@ export type FederatedSearchMeta = {
 
 const QUERY_MAX_LENGTH = 1000
 const CONTEXT_HINT_MAX_LENGTH = 3000
+const ANSWER_STREAM_ENDPOINT = typeof window === 'undefined' ? '/api/ask' : '/api/ask/stream'
 
 // Module-level abort controllers (not serializable, outside store)
 let answerAbort: AbortController | null = null
@@ -241,6 +251,7 @@ interface AppState {
   chatMetrics: Record<string, QueryMetrics>
   answerQuality: GroundingAssessment | null
   researchQuality: GroundingAssessment | null
+  answerProgress: AnswerProgress[]
   error: string | null
   answer: string
   sources: Source[]
@@ -325,6 +336,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   chatMetrics: {},
   answerQuality: null,
   researchQuality: null,
+  answerProgress: [],
   error: null,
   answer: '',
   sources: [],
@@ -435,6 +447,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
       takeaways: [],
       answerMetrics: null,
       answerQuality: null,
+      answerProgress: [],
       searchMeta: null,
       answerStartTime: Date.now(),
       modeManuallySet: false,
@@ -444,7 +457,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
       const searchTarget = get().searchTarget
       const semanticSearch = get().semanticSearch
       const journeyContext = buildJourneyContext(truncated, 'ai')
-      const res = await fetch('/api/ask', {
+      const res = await fetch(ANSWER_STREAM_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -474,7 +487,11 @@ export const useAppStore = create<AppState>()((set, get) => ({
             set({ isLoading: false, isThinking: false, relatedQuestionsLoading: false, ...setError(payload.data ?? 'Something went wrong.') })
             return false
           }
-          if (payload.type === 'sources') {
+          if (payload.type === 'progress') {
+            if (payload.data) {
+              set((state) => ({ answerProgress: [...state.answerProgress, payload.data!].slice(-12) }))
+            }
+          } else if (payload.type === 'sources') {
             const d = payload.data ?? {}
             set({ sources: d.web ?? [], localSources: d.local ?? [] })
           } else if (payload.type === 'thinking_delta') {
@@ -1004,6 +1021,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
       takeaways: [],
       answerMetrics: null,
       answerQuality: null,
+      answerProgress: [],
       researchMetrics: null,
       researchQuality: null,
       answerStartTime: null,

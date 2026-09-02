@@ -257,8 +257,14 @@ describe('ranking signals', () => {
   })
 
   it('keeps network discovery bounded while adding high-precision clauses', () => {
-    expect(deriveDiscoveryQueries('How do SQLite WAL checkpoints work?')).toEqual([
+    expect(deriveDiscoveryQueries('How do SQLite WAL checkpoints work?', 3, true)).toEqual([
       'How do SQLite WAL checkpoints work?',
+      'sqlite wal checkpoints work',
+    ])
+    expect(deriveDiscoveryQueries('who is Bogdan Nicolae?')).toEqual([
+      'who is Bogdan Nicolae?',
+      'Bogdan Nicolae official biography',
+      'Bogdan Nicolae profile affiliation',
     ])
     const normative = deriveDiscoveryQueries(
       'Is Retry-After required with 429 Too Many Requests? May Retry-After be sent with 503 Service Unavailable?'
@@ -371,6 +377,14 @@ describe('ranking signals', () => {
     expect(queryTokenCoverage('who is Marisol Venn', partial)).toBe(0.5)
     expect(queryRelevance('who is Marisol Venn', official)).toBeGreaterThan(
       queryRelevance('who is Marisol Venn', partial) * 3
+    )
+    const reversed = result({
+      url: 'https://example.org/venn-marisol',
+      title: 'Venn Marisol',
+      snippet: 'Venn Marisol is a different person.',
+    })
+    expect(queryRelevance('who is Marisol Venn', official)).toBeGreaterThan(
+      queryRelevance('who is Marisol Venn', reversed)
     )
   })
 

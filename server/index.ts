@@ -38,6 +38,7 @@ import {
   type CompleteQueryRecordInput,
   type PersistedCollection,
   type PersistedKnowledgeResource,
+  type QueryExecutionPhase,
   type QueryRetrievalDiagnostics,
   type QueryRecordMode,
   type SharedSession,
@@ -175,6 +176,7 @@ function boundedEnvInt(raw: string | undefined, fallback: number, minimum: numbe
 
 const SEARXNG_URL = process.env.SEARXNG_URL || 'http://127.0.0.1:8888'
 const LLM_URL = requireLocalInferenceEndpoint(process.env.LLM_URL || 'http://127.0.0.1:8080')
+const EMBEDDING_MODEL = readKeepIndexEnvironment('EMBEDDING_MODEL') || ''
 const INFERENCE_TRANSPORT = new LocalInferenceTransport(LLM_URL, resolveInferenceAdapter())
 const WEB_SEARCH_PROVIDER = 'searxng'
 const LOCAL_SEARCH_PROVIDER = 'local-hybrid-bm25'
@@ -237,9 +239,9 @@ const MAX_CHUNKS_PER_FILE = 2
 const MAX_QUERY_CHARS = 1000
 const MAX_CONVERSATION_MESSAGES = 24
 const MAX_CONVERSATION_MESSAGE_CHARS = 2000
-const MAX_INDEXED_FILES = 8000
+const MAX_INDEXED_FILES = boundedEnvInt(process.env.KEEPINDEX_MAX_INDEXED_FILES, 8000, 1000, 100000)
 const MAX_KNOWLEDGE_RESOURCES = 24
-const MAX_INDEXED_CHUNKS = 80000
+const MAX_INDEXED_CHUNKS = boundedEnvInt(process.env.KEEPINDEX_MAX_INDEXED_CHUNKS, 80000, 10000, 500000)
 const MAX_INDEX_FILE_BYTES = 4 * 1024 * 1024
 const MAX_INDEX_DOCUMENT_BYTES = 32 * 1024 * 1024
 const MAX_SNAPSHOT_CHARS = 2_000_000
@@ -449,7 +451,6 @@ let knowledgeMutationTail: Promise<void> = Promise.resolve()
 type CacheEntry<T> = { value: T; expiresAt: number }
 const relatedQuestionsCache = new Map<string, CacheEntry<string[]>>()
 const takeawaysCache = new Map<string, CacheEntry<string[]>>()
-const semanticQueryCache = new Map<string, CacheEntry<string[]>>()
 let collectionHostPreferenceCache: ReadonlyMap<string, number> | null = null
 let collectionHostPreferencePromise: Promise<ReadonlyMap<string, number>> | null = null
 
@@ -1044,55 +1045,93 @@ async function fetchLlmCompletionText(
   }
 }
 
-async function expandLocalSearchQueries(
-  query: string,
-  signal: AbortSignal,
-  model?: string
-): Promise<{ queries: string[]; mode: 'semantic-expansion' | 'keyword'; warning?: string }> {
-  const normalized = query.replace(/\s+/g, ' ').trim()
-  if (!normalized) return { queries: [], mode: 'keyword' }
-  const targetModel = normalizeModel(model || activeDefaultModel)
-  const cacheKey = `${targetModel}::${normalized.toLowerCase()}`
-  const cached = getCachedValue(semanticQueryCache, cacheKey)
-  if (cached) return { queries: cached, mode: 'semantic-expansion' }
+function cosineSimilarity(left: readonly number[], right: readonly number[]): number {
+  if (left.length === 0 || left.length !== right.length) return 0
+  let dot = 0
+  let leftMagnitude = 0
+  let rightMagnitude = 0
+  for (let index = 0; index < left.length; index += 1) {
+    dot += left[index] * right[index]
+    leftMagnitude += left[index] * left[index]
+    rightMagnitude += right[index] * right[index]
+  }
+  const denominator = Math.sqrt(leftMagnitude) * Math.sqrt(rightMagnitude)
+  return denominator > 0 ? dot / denominator : 0
+}
+
+async function fetchLocalEmbeddings(inputs: string[], signal: AbortSignal): Promise<number[][]> {
+  if (!EMBEDDING_MODEL || inputs.length === 0) return []
+  const timed = createTimeoutSignal(signal, 12_000)
   try {
-    const text = await fetchLlmCompletionText(
-      [
-        {
-          role: 'system',
-          content: `You expand a private local-file search by meaning. Return STRICT JSON only: {"queries":["...","..."]}.
-Rules:
-- Return exactly 2 concise alternate retrieval queries.
-- Preserve named entities, versions, filenames, and technical identifiers exactly.
-- Add synonyms or conceptually related terminology; do not answer the query.
-- Never include paths, secrets, commands, or commentary.`,
-        },
-        { role: 'user', content: normalized },
-      ],
-      {
-        signal,
-        model: targetModel,
-        temperature: 0.05,
-        maxTokens: 160,
-        timeoutMs: 15_000,
-        retries: 0,
-      }
+    const response = await fetch(`${LLM_URL}/v1/embeddings`, {
+      method: 'POST',
+      redirect: LOCAL_INFERENCE_REDIRECT_POLICY,
+      signal: timed.signal,
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ model: EMBEDDING_MODEL, input: inputs }),
+    })
+    if (!response.ok) return []
+    const payload = await response.json() as {
+      data?: Array<{ index?: number; embedding?: unknown }>
+    }
+    const ordered = [...(payload.data ?? [])].sort((left, right) =>
+      Number(left.index ?? 0) - Number(right.index ?? 0)
     )
-    const parsed = text ? parseJsonObject(text) : null
-    const alternates = Array.isArray(parsed?.queries)
-      ? parsed.queries.filter((value): value is string => typeof value === 'string')
-      : []
-    const queries = dedupeTextList([normalized, ...alternates], 3, 240)
-    if (queries.length <= 1) return { queries: [normalized], mode: 'keyword', warning: 'Local model returned no usable concept expansions.' }
-    setCachedValue(semanticQueryCache, cacheKey, queries)
-    return { queries, mode: 'semantic-expansion' }
+    if (ordered.length !== inputs.length) return []
+    const vectors = ordered.map((item) => Array.isArray(item.embedding)
+      ? item.embedding.filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+      : [])
+    const dimensions = vectors[0]?.length ?? 0
+    if (dimensions === 0 || dimensions > 4096 || vectors.some((vector) => vector.length !== dimensions)) return []
+    return vectors
+  } finally {
+    timed.cleanup()
+  }
+}
+
+async function rerankLocalEvidenceWithEmbeddings(
+  query: string,
+  candidates: KnowledgeSearchResult[],
+  signal: AbortSignal
+): Promise<{ results: KnowledgeSearchResult[]; mode: 'embedding-rerank' | 'keyword'; warning?: string }> {
+  if (!EMBEDDING_MODEL || candidates.length < 2) {
+    return {
+      results: candidates,
+      mode: 'keyword',
+      ...(!EMBEDDING_MODEL ? { warning: 'No local embedding model is configured.' } : {}),
+    }
+  }
+  try {
+    const vectors = await fetchLocalEmbeddings([
+      `search_query: ${query}`,
+      ...candidates.map((candidate) =>
+        `search_document: ${candidate.fileName}\n${truncateText(candidate.content, 1800)}`
+      ),
+    ], signal)
+    if (vectors.length !== candidates.length + 1) {
+      return { results: candidates, mode: 'keyword', warning: 'Local embedding service returned no usable vectors.' }
+    }
+    const lexical = normalizeLocalEvidenceScores(candidates)
+    const results = lexical.map((candidate, index) => {
+      const cosine = cosineSimilarity(vectors[0], vectors[index + 1])
+      const semanticScore = Math.max(0, Math.min(1, (cosine + 1) / 2))
+      return {
+        ...candidate,
+        normalizedScore: (candidate.normalizedScore ?? 0) * 0.6 + semanticScore * 0.4,
+      }
+    }).sort((left, right) =>
+      (right.normalizedScore ?? 0) - (left.normalizedScore ?? 0) ||
+      (left.filePath < right.filePath ? -1 : left.filePath > right.filePath ? 1 : 0) ||
+      left.startLine - right.startLine
+    )
+    const diagnostics = getLocalRetrievalDiagnostics(candidates)
+    return {
+      results: diagnostics ? attachLocalRetrievalDiagnostics(results, diagnostics) : results,
+      mode: 'embedding-rerank',
+    }
   } catch (error) {
     if (signal.aborted) throw error
-    return {
-      queries: [normalized],
-      mode: 'keyword',
-      warning: 'Concept search was unavailable; keyword retrieval completed normally.',
-    }
+    return { results: candidates, mode: 'keyword', warning: 'Local embedding rerank was unavailable.' }
   }
 }
 
@@ -2186,6 +2225,62 @@ function parseSessionEtag(value: string | undefined): number | null {
   return Number.isSafeInteger(revision) ? revision : null
 }
 
+type QueryPhaseStatus = QueryExecutionPhase['status']
+type QueryPhaseDetail = QueryExecutionPhase['detail']
+type QueryPhaseFinish = (status?: QueryPhaseStatus, detail?: QueryPhaseDetail) => void
+
+type QueryExecutionTracer = {
+  start(name: string, detail?: QueryPhaseDetail): QueryPhaseFinish
+  mark(name: string, detail?: QueryPhaseDetail, status?: QueryPhaseStatus): void
+  snapshot(): QueryExecutionPhase[]
+}
+
+const activeQueryTraces = new Map<string, QueryExecutionTracer>()
+const activeQueryProgress = new Map<string, (phase: QueryExecutionPhase) => void>()
+
+function createQueryExecutionTracer(
+  requestStartedAt: number,
+  onPhase?: (phase: QueryExecutionPhase) => void
+): QueryExecutionTracer {
+  const phases: QueryExecutionPhase[] = []
+  const start = (name: string, initialDetail: QueryPhaseDetail = {}): QueryPhaseFinish => {
+    const phaseStartedAt = Date.now()
+    let finished = false
+    return (status = 'ok', detail = {}) => {
+      if (finished) return
+      finished = true
+      const phase = {
+        name,
+        startedOffsetMs: Math.max(0, phaseStartedAt - requestStartedAt),
+        durationMs: Math.max(0, Date.now() - phaseStartedAt),
+        status,
+        detail: { ...initialDetail, ...detail },
+      } satisfies QueryExecutionPhase
+      phases.push(phase)
+      onPhase?.(phase)
+    }
+  }
+  return {
+    start,
+    mark(name, detail = {}, status = 'ok') {
+      const phase = {
+        name,
+        startedOffsetMs: Math.max(0, Date.now() - requestStartedAt),
+        durationMs: 0,
+        status,
+        detail,
+      } satisfies QueryExecutionPhase
+      phases.push(phase)
+      onPhase?.(phase)
+    },
+    snapshot() {
+      return [...phases].sort((left, right) =>
+        left.startedOffsetMs - right.startedOffsetMs || left.name.localeCompare(right.name)
+      )
+    },
+  }
+}
+
 function queryRecordCompletion(
   metrics: LlmStreamMetrics | null,
   endToEndMs: number
@@ -2236,10 +2331,16 @@ async function completeQueryRecordSafely(
   input: CompleteQueryRecordInput
 ): Promise<void> {
   if (!started) return
+  const tracer = activeQueryTraces.get(requestId)
   try {
-    await completeQueryRecord(requestId, input)
+    await completeQueryRecord(requestId, {
+      ...input,
+      executionTrace: input.executionTrace ?? tracer?.snapshot(),
+    })
   } catch (error) {
     console.warn('[keepindex-database] could not complete query record', error)
+  } finally {
+    activeQueryTraces.delete(requestId)
   }
 }
 
@@ -4520,7 +4621,7 @@ type FederatedRun = {
   webResults: SearchResult[]
   localResults: KnowledgeSearchResult[]
   historyResults: SearchResult[]
-  semantic: { requested: boolean; mode: 'semantic-expansion' | 'keyword'; queries: string[]; warning?: string }
+  semantic: { requested: boolean; mode: 'embedding-rerank' | 'keyword'; queries: string[]; warning?: string }
   webOutcome: SearchResult[] | SearchFailure
   degraded: boolean
 }
@@ -4610,22 +4711,22 @@ async function runFederatedSearch(input: {
   const historyPromise = allowHistory
     ? fetchBrowserHistoryResults(historyQuery, Math.max(30, input.count * 4)).catch(() => [])
     : Promise.resolve([])
-  const semanticPromise = allowLocal && input.semantic
-    ? expandLocalSearchQueries(parsedLocal.query || input.query, input.signal, input.model)
-    : Promise.resolve({ queries: [parsedLocal.query || input.query], mode: 'keyword' as const })
-
-  const [webOutcome, historyResults, semanticExpansion] = await Promise.all([
-    webPromise,
-    historyPromise,
-    semanticPromise,
-  ])
-  const localResults = allowLocal
+  let localResults = allowLocal
     ? searchKnowledgeAcrossQueries(
-        semanticExpansion.queries,
+        [parsedLocal.query || input.query],
         Math.max(30, input.count * 4),
         parsedLocal.options
       )
     : []
+  const semanticResult = allowLocal && input.semantic
+    ? await rerankLocalEvidenceWithEmbeddings(
+        parsedLocal.query || input.query,
+        localResults,
+        input.signal
+      )
+    : { results: localResults, mode: 'keyword' as const }
+  localResults = semanticResult.results
+  const [webOutcome, historyResults] = await Promise.all([webPromise, historyPromise])
   // skippedWebOutcome() is an empty array, so Array.isArray cannot stand in for
   // "web was requested". Without the allowWeb guard the deterministic first-party
   // seeds were injected into vault, files, documents and history searches, and a
@@ -4656,9 +4757,9 @@ async function runFederatedSearch(input: {
     historyResults,
     semantic: {
       requested: allowLocal && input.semantic,
-      mode: semanticExpansion.mode,
-      queries: semanticExpansion.queries,
-      ...('warning' in semanticExpansion && semanticExpansion.warning ? { warning: semanticExpansion.warning } : {}),
+      mode: semanticResult.mode,
+      queries: [parsedLocal.query || input.query],
+      ...('warning' in semanticResult && semanticResult.warning ? { warning: semanticResult.warning } : {}),
     },
     webOutcome,
     degraded: allowWeb && !Array.isArray(webOutcome),
@@ -5049,9 +5150,96 @@ Requirements:
   }
 })
 
+// The original /api/ask contract remains available for API clients. The UI
+// uses this streaming façade so the response opens before retrieval starts and
+// receives real phase completions from the same durable execution tracer.
+app.post('/api/ask/stream', async (c) => {
+  const bodyText = await c.req.text()
+  let body: Record<string, unknown>
+  try {
+    body = JSON.parse(bodyText) as Record<string, unknown>
+  } catch {
+    return c.json({ error: 'invalid JSON body' }, 400)
+  }
+  const requestId = durableRequestId(typeof body.requestId === 'string' ? body.requestId : undefined)
+  body.requestId = requestId
+
+  return streamSSE(c, async (stream) => {
+    let pendingProgressWrite = Promise.resolve()
+    const writeProgress = (phase: QueryExecutionPhase) => {
+      pendingProgressWrite = pendingProgressWrite.then(async () => {
+        await stream.writeSSE({
+          event: 'message',
+          data: JSON.stringify({
+            type: 'progress',
+            data: {
+              phase: phase.name,
+              status: phase.status,
+              elapsedMs: phase.startedOffsetMs + phase.durationMs,
+              durationMs: phase.durationMs,
+              detail: phase.detail,
+            },
+            requestId,
+          }),
+        })
+      }).catch(() => {})
+    }
+
+    activeQueryProgress.set(requestId, writeProgress)
+    writeProgress({
+      name: 'request_accepted',
+      startedOffsetMs: 0,
+      durationMs: 0,
+      status: 'ok',
+      detail: {},
+    })
+    await pendingProgressWrite
+    // Yield once so Bun can flush the accepted event before synchronous local
+    // ranking occupies the JavaScript thread.
+    await new Promise<void>((resolveYield) => setTimeout(resolveYield, 0))
+
+    try {
+      const response = await app.request('/api/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: c.req.raw.signal,
+      })
+      await pendingProgressWrite
+      activeQueryProgress.delete(requestId)
+
+      if (!response.ok || !response.body) {
+        await stream.writeSSE({
+          event: 'message',
+          data: JSON.stringify({ type: 'error', data: 'Something went wrong', requestId }),
+        })
+        return
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        await stream.write(decoder.decode(value, { stream: true }))
+      }
+      const tail = decoder.decode()
+      if (tail) await stream.write(tail)
+    } finally {
+      activeQueryProgress.delete(requestId)
+      stream.close()
+    }
+  })
+})
+
 app.on('POST', ['/api/chat', '/api/ask'], async (c) => {
   const requestStartedAt = Date.now()
   let durableId = ''
+  const executionTrace = createQueryExecutionTracer(
+    requestStartedAt,
+    (phase) => activeQueryProgress.get(durableId)?.(phase)
+  )
+  const finishRequestSetup = executionTrace.start('request_setup')
   let queryRecordStarted = false
   let durableQuery = ''
   let durableFocus = 'all'
@@ -5078,6 +5266,12 @@ app.on('POST', ['/api/chat', '/api/ask'], async (c) => {
     durableId = requestId
     durableQuery = query
     durableFocus = focus
+    finishRequestSetup('ok', {
+      semantic: body.semantic === true,
+      target: searchTarget,
+      focus,
+    })
+    const finishQueryRecordStart = executionTrace.start('query_record_start')
     const queryRecordState = await beginQueryRecordSafely({
       requestId,
       endpoint: c.req.path,
@@ -5086,9 +5280,13 @@ app.on('POST', ['/api/chat', '/api/ask'], async (c) => {
       focus: `${searchTarget}:${focus}`,
       requestedModel: targetModel,
     })
+    finishQueryRecordStart(queryRecordState === 'started' ? 'ok' : 'error', { state: queryRecordState })
     if (queryRecordState === 'duplicate') return c.json({ error: 'requestId already exists', requestId }, 409)
     queryRecordStarted = queryRecordState === 'started'
+    if (queryRecordStarted) activeQueryTraces.set(requestId, executionTrace)
+    const finishKnowledgeLoad = executionTrace.start('knowledge_load')
     await ensureKnowledgeLoaded()
+    finishKnowledgeLoad('ok', { chunks: knowledgeIndex.length, resources: knowledgeResources.length })
 
     const journeyContext = formatJourneyContext(body.journeyContext)
     const handoffContext = formatHandoffContext(body.handoffContext)
@@ -5097,36 +5295,94 @@ app.on('POST', ['/api/chat', '/api/ask'], async (c) => {
     const allowWeb = targetIncludesWeb(searchTarget)
     const allowLocal = targetIncludesLocal(searchTarget)
     const allowHistory = targetIncludesHistory(searchTarget)
-    const discoveryQueries = allowWeb ? deriveDiscoveryQueries(retrievalQuery) : []
+    const finishQueryPlanning = executionTrace.start('query_planning')
+    const discoveryQueries = allowWeb ? deriveDiscoveryQueries(retrievalQuery, 3, true) : []
+    const structuralLocalQueries = allowLocal ? deriveLocalRetrievalQueries(retrievalQuery) : []
+    const localRetrievalQuery = structuralLocalQueries[0] ?? (derivePrimaryRetrievalQuery(retrievalQuery) || retrievalQuery)
+    finishQueryPlanning('ok', {
+      webQueries: discoveryQueries.length,
+      structuralLocalQueries: structuralLocalQueries.length,
+    })
+
+    const finishWebRetrieval = executionTrace.start('web_retrieval', { queries: discoveryQueries.length })
     const rawResultsPromise = allowWeb
       ? fetchDiscoverySearchResults(
           discoveryQueries,
           focus,
           Math.max(20, Math.ceil(MAX_WEB_RANKING_CANDIDATES / Math.max(1, discoveryQueries.length))),
           c.req.raw.signal
-        )
-      : Promise.resolve(skippedWebOutcome())
+        ).then((outcome) => {
+          const metadata = getSearchFetchMetadata(outcome)
+          finishWebRetrieval(
+            Array.isArray(outcome) ? 'ok' : outcome.error === 'request aborted' ? 'aborted' : 'error',
+            {
+              rawCandidates: metadata.rawCandidateCount,
+              usableCandidates: metadata.usableCandidateCount,
+              attempts: metadata.attempts,
+            }
+          )
+          return outcome
+        })
+      : Promise.resolve(skippedWebOutcome()).then((outcome) => {
+          finishWebRetrieval('skipped')
+          return outcome
+        })
+    const finishHistoryRetrieval = executionTrace.start('history_retrieval')
     const historyPromise = allowHistory
-      ? fetchBrowserHistoryResults(retrievalQuery, 30).catch(() => [])
-      : Promise.resolve([])
+      ? fetchBrowserHistoryResults(retrievalQuery, 30)
+          .then((results) => {
+            finishHistoryRetrieval('ok', { candidates: results.length })
+            return results
+          })
+          .catch(() => {
+            finishHistoryRetrieval('error')
+            return []
+          })
+      : Promise.resolve([]).then((results) => {
+          finishHistoryRetrieval('skipped')
+          return results
+        })
     const localSearchStartedAt = Date.now()
-    const structuralLocalQueries = allowLocal ? deriveLocalRetrievalQueries(retrievalQuery) : []
-    const localRetrievalQuery = structuralLocalQueries[0] ?? (derivePrimaryRetrievalQuery(retrievalQuery) || retrievalQuery)
-    const semanticExpansion = allowLocal && body.semantic === true
-      ? await expandLocalSearchQueries(localRetrievalQuery, c.req.raw.signal, targetModel)
-      : { queries: [localRetrievalQuery], mode: 'keyword' as const }
     const localRetrievalQueries = dedupeTextList(
-      [...structuralLocalQueries, ...semanticExpansion.queries],
+      [...structuralLocalQueries, localRetrievalQuery],
       3,
       280
     )
-    const localCandidates = allowLocal
+    const finishLocalRetrieval = executionTrace.start('local_retrieval', { pass: 'keyword' })
+    let localCandidates = allowLocal
       ? searchKnowledgeAcrossQueries(
           localRetrievalQueries.length > 0 ? localRetrievalQueries : [localRetrievalQuery],
           MAX_TOTAL_CONTEXT_SOURCES,
           localOptionsForTarget(searchTarget)
         )
       : []
+    const localMetadata = getLocalRetrievalDiagnostics(localCandidates)
+    finishLocalRetrieval(allowLocal ? 'ok' : 'skipped', {
+      queries: localRetrievalQueries.length,
+      rawMatches: localMetadata?.rawMatchedCount ?? 0,
+      usableCandidates: localMetadata?.usableCandidateCount ?? localCandidates.length,
+      returnedCandidates: localCandidates.length,
+    })
+
+    const finishEmbeddingRerank = executionTrace.start('embedding_rerank', {
+      requested: allowLocal && body.semantic === true,
+      model: EMBEDDING_MODEL || null,
+      candidates: localCandidates.length,
+    })
+    if (allowLocal && body.semantic === true) {
+      const reranked = await rerankLocalEvidenceWithEmbeddings(
+        localRetrievalQuery,
+        localCandidates,
+        c.req.raw.signal
+      )
+      localCandidates = reranked.results
+      finishEmbeddingRerank(reranked.mode === 'embedding-rerank' ? 'ok' : 'error', {
+        mode: reranked.mode,
+        warning: reranked.warning ?? null,
+      })
+    } else {
+      finishEmbeddingRerank('skipped', { mode: 'keyword' })
+    }
     if (localRetrievalQueries.length > 1) {
       const quotedTitle = /["“”]([^"“”]{3,160})["“”]/.exec(retrievalQuery)?.[1]
         ?.replace(/\.md$/i, '')
@@ -5205,6 +5461,10 @@ app.on('POST', ['/api/chat', '/api/ask'], async (c) => {
       ...historyCandidates,
     ]
 
+    const finishRankingAndFusion = executionTrace.start('ranking_and_fusion', {
+      webCandidates: webCandidates.length,
+      localCandidates: localCandidates.length,
+    })
     // Rank first, then cut. The pack that reaches the model is exactly the list
     // the client receives, so citation [n] always resolves to the source the
     // model actually read.
@@ -5223,7 +5483,7 @@ app.on('POST', ['/api/chat', '/api/ask'], async (c) => {
       ? 10
       : focusedWebVerification
         ? 12
-        : MAX_TOTAL_CONTEXT_SOURCES
+        : 12
     const fusedPack = selectFusedEvidence(ranked, localCandidates, {
       limit: evidenceLimit,
       // When the user names one saved document and asks about several aspects,
@@ -5231,12 +5491,20 @@ app.on('POST', ['/api/chat', '/api/ask'], async (c) => {
       // extra passage prevents a chunk boundary from hiding a requested aspect.
       maxPerFile: localRetrievalQueries.length > 1 ? 4 : MAX_CHUNKS_PER_FILE,
     })
+    finishRankingAndFusion('ok', {
+      selectedWeb: fusedPack.counts.selectedWeb,
+      selectedLocal: fusedPack.counts.selectedLocal,
+      rejectedWeb: fusedPack.counts.rejectedWeb,
+      rejectedLocal: fusedPack.counts.rejectedLocal,
+    })
+    const finishWebHydration = executionTrace.start('web_hydration', { sources: fusedPack.web.length })
     const webForPrompt = await hydratePublicWebEvidence(
       fusedPack.web,
       retrievalQuery,
       { signal: c.req.raw.signal },
       allowWeb
     )
+    finishWebHydration(allowWeb ? 'ok' : 'skipped', { hydratedSources: webForPrompt.length })
     const localResults = fusedPack.local
     const retrievalDiagnostics = buildSingleRetrievalDiagnostics({
       strategy: 'weighted-rrf-v1',
@@ -5276,6 +5544,7 @@ app.on('POST', ['/api/chat', '/api/ask'], async (c) => {
     const localForPrompt = localResults
       .map((r) => ({ filePath: r.filePath, fileName: r.fileName, content: r.content, startLine: r.startLine, endLine: r.endLine, resourceId: r.resourceId, resourceLabel: r.resourceLabel, indexedAt: r.indexedAt }))
 
+    const finishPromptAssembly = executionTrace.start('prompt_assembly')
     const webSection = formatWebSourcesForPrompt(webForPrompt)
     const localSection = formatLocalSourcesForPrompt(localForPrompt)
     const systemPrompt = `You are KeepIndex, a private evidence-synthesis engine.
@@ -5303,12 +5572,17 @@ Style:
 - Start directly with the answer in 1-2 concise sentences.
 - Add structured explanations, tables, or code snippets only when useful.
 - Prefer a short grounded answer over a comprehensive unsupported one.
-- Keep the answer under about 600 words unless the user explicitly asks for a longer report.
+- Keep the answer under about 350 words unless the user explicitly asks for a longer report.
 ${normativeHttpVerification ? `- For this normative Retry-After question, answer only with exactly three short factual bullets and no separate opening or closing summary. Make each bullet exactly one sentence with its supporting citation at the end; do not combine or quote multiple RFC sentences inside one bullet. The 429 bullet must quote MAY and cite RFC 6585. The 503 bullet must quote MAY and cite RFC 9110. The field-syntax bullet must cite RFC 9110, name HTTP-date and delay-seconds, and state that delay-seconds is a non-negative decimal integer. Do not add examples, non-normative guidance, conflict commentary, a table, or caveats unless the supplied normative RFC excerpts conflict.\n` : ''}
 ${generationPolicy.compactContext ? '- You are operating under a compact-model policy: keep reasoning simple, quote uncertainty explicitly, and never extrapolate beyond a source snippet.\n' : ''}
 <<<SOURCE_PACK>>>
 ${webSection}${localSection}
 <<<END_SOURCE_PACK>>>${journeyContext}${handoffContext}`
+    finishPromptAssembly('ok', {
+      promptChars: systemPrompt.length + query.length,
+      webSources: webForPrompt.length,
+      localSources: localForPrompt.length,
+    })
 
     const sourcesPayload = {
       web: results,
@@ -5335,6 +5609,9 @@ ${webSection}${localSection}
     void upsertSearchHistory(query, 'ai', focus).catch(() => {})
 
     return streamSSE(c, async (stream) => {
+      executionTrace.mark('client_stream_open', {
+        elapsedBeforeStreamMs: Date.now() - requestStartedAt,
+      })
       let recordCompleted = false
       let answerText = ''
       let actualModel: string | null = null
@@ -5407,6 +5684,9 @@ ${webSection}${localSection}
           { role: 'system' as const, content: systemPrompt },
           { role: 'user' as const, content: query },
         ]
+        const finishInferenceConnect = executionTrace.start('inference_connect', {
+          model: targetModel,
+        })
         const llmRes = await fetchLlmChatCompletions(
           synthesisMessages,
           {
@@ -5414,7 +5694,7 @@ ${webSection}${localSection}
             signal: c.req.raw.signal,
             model: targetModel,
             temperature: generationPolicy.temperature,
-            maxTokens: generationPolicy.compactContext ? 1200 : 1800,
+            maxTokens: generationPolicy.compactContext ? 1000 : 1600,
             timeoutMs: LLM_STREAM_TIMEOUT_MS,
             // Evidence synthesis needs a complete cited answer more than a
             // private reasoning trace. Reserve the completion budget for
@@ -5423,6 +5703,9 @@ ${webSection}${localSection}
           }
         )
 
+        finishInferenceConnect(llmRes.ok && llmRes.body ? 'ok' : 'error', {
+          status: llmRes.status,
+        })
         if (!llmRes.ok || !llmRes.body) {
           releaseLlmResponse(llmRes)
           await completeQueryRecordSafely(queryRecordStarted, requestId, {
@@ -5460,8 +5743,16 @@ ${webSection}${localSection}
 
         actualModel = responseModel.get(llmRes) ?? targetModel
         let answerFallbackUsed = false
+        let observedFirstReasoningToken = false
+        let observedFirstContentToken = false
         const streamCallbacks = {
           onReasoning: async (token: string) => {
+            if (!observedFirstReasoningToken) {
+              observedFirstReasoningToken = true
+              executionTrace.mark('first_reasoning_token', {
+                elapsedMs: Date.now() - requestStartedAt,
+              })
+            }
             await stream.writeSSE({
               event: 'message',
               data: JSON.stringify(
@@ -5472,6 +5763,12 @@ ${webSection}${localSection}
             })
           },
           onContent: async (token: string) => {
+            if (!observedFirstContentToken) {
+              observedFirstContentToken = true
+              executionTrace.mark('first_content_token', {
+                elapsedMs: Date.now() - requestStartedAt,
+              })
+            }
             answerText += token
             await stream.writeSSE({
               event: 'message',
@@ -5483,7 +5780,14 @@ ${webSection}${localSection}
             })
           },
         }
+        const finishInferenceStream = executionTrace.start('inference_stream')
         let metrics = await streamLlmTokens(llmRes, streamCallbacks)
+        finishInferenceStream('ok', {
+          outputTokens: metrics.outputTokens,
+          timeToFirstTokenMs: metrics.timeToFirstTokenMs,
+          tokensPerSecond: metrics.tokensPerSecond,
+          finishReason: metrics.finishReason ?? null,
+        })
         actualModel = getInferenceResponseModel(llmRes) ?? actualModel
 
         // Reasoning-capable models can consume max_tokens entirely in
@@ -5500,6 +5804,7 @@ ${webSection}${localSection}
                 : { type: 'thinking_delta', data: '\nReasoning budget reached; generating a concise answer…\n' }
             ),
           })
+          const finishFallbackConnect = executionTrace.start('inference_fallback_connect')
           const fallbackRes = await fetchLlmChatCompletions(synthesisMessages, {
             stream: true,
             signal: c.req.raw.signal,
@@ -5510,6 +5815,9 @@ ${webSection}${localSection}
             retries: 0,
             chatTemplateKwargs: { enable_thinking: false },
           })
+          finishFallbackConnect(fallbackRes.ok && fallbackRes.body ? 'ok' : 'error', {
+            status: fallbackRes.status,
+          })
           if (!fallbackRes.ok || !fallbackRes.body) {
             releaseLlmResponse(fallbackRes)
             throw new IncompleteLlmStreamError(
@@ -5518,7 +5826,14 @@ ${webSection}${localSection}
             )
           }
           actualModel = responseModel.get(fallbackRes) ?? actualModel ?? targetModel
+          const finishFallbackStream = executionTrace.start('inference_fallback_stream')
           const fallbackMetrics = await streamLlmTokens(fallbackRes, streamCallbacks)
+          finishFallbackStream('ok', {
+            outputTokens: fallbackMetrics.outputTokens,
+            timeToFirstTokenMs: fallbackMetrics.timeToFirstTokenMs,
+            tokensPerSecond: fallbackMetrics.tokensPerSecond,
+            finishReason: fallbackMetrics.finishReason ?? null,
+          })
           actualModel = getInferenceResponseModel(fallbackRes) ?? actualModel
           metrics = combineLlmStreamMetrics(metrics, fallbackMetrics)
         }
@@ -5536,53 +5851,47 @@ ${webSection}${localSection}
           )
         }
 
+        const finishGroundingAssessment = executionTrace.start('grounding_assessment')
         let quality = assessGrounding(answerText, results.length, localResults.length)
-        // Repair rewrites uncited claims. An answer with no gradeable claim has
-        // nothing for it to fix, so running it there only spends an LLM call and
-        // risks editing a correct short answer.
+        finishGroundingAssessment('ok', {
+          citationCoveragePct: quality.citationCoveragePct,
+          invalidCitations: quality.invalidCitations.length,
+        })
+        // The live baseline showed that two full model-edit passes cost 50–67s
+        // and improved 0/5 answers. Ask now uses the conservative deterministic
+        // cleanup first: it only removes uniquely located uncited claims, keeps
+        // every citation and Markdown structure, and refuses to remove more
+        // than 15% of the draft. Research retains its model-assisted editor.
         const gradeableClaimCount = collectGroundingClaimSegments(normalizeGroundingProse(answerText)).length
         if (gradeableClaimCount > 0 && quality.citationCoveragePct < CITATION_REPAIR_TARGET_PCT) {
-          try {
+          const finishCitationRepair = executionTrace.start('citation_repair', {
+            strategy: 'deterministic-prune',
+            initialCoveragePct: quality.citationCoveragePct,
+          })
+          const repaired = pruneUncitedResearchClaims({
+            text: answerText,
+            webSourceCount: results.length,
+            localSourceCount: localResults.length,
+          })
+          if (repaired) {
+            answerText = repaired.text
+            quality = repaired.quality
             await stream.writeSSE({
               event: 'message',
               data: JSON.stringify(requestId
-                ? { type: 'thinking_delta', data: '\nChecking sentence-level citations…\n', requestId }
-                : { type: 'thinking_delta', data: '\nChecking sentence-level citations…\n' }),
+                ? { type: 'answer_replace', data: answerText, requestId }
+                : { type: 'answer_replace', data: answerText }),
             })
-            for (
-              let pass = 0;
-              pass < MAX_CITATION_REPAIR_PASSES && quality.citationCoveragePct < CITATION_REPAIR_TARGET_PCT;
-              pass += 1
-            ) {
-              const previousCoverage = quality.citationCoveragePct
-              const repaired = await repairCitationCoverage({
-                text: answerText,
-                sourcePack: `${webSection}${localSection}`,
-                webSourceCount: results.length,
-                localSourceCount: localResults.length,
-                model: actualModel ?? targetModel,
-                signal: c.req.raw.signal,
-                strategy: pass === 0 ? 'source-aware' : 'safe-cleanup',
-              })
-              // repairCitationCoverage enforces the structure, identifier,
-              // length, and strict-improvement guards for every individual
-              // pass. A rejected source-aware edit still gets one materially
-              // different, citation-preserving cleanup attempt.
-              if (!repaired || repaired.quality.citationCoveragePct <= previousCoverage) continue
-              answerText = repaired.text
-              quality = repaired.quality
-              await stream.writeSSE({
-                event: 'message',
-                data: JSON.stringify(requestId
-                  ? { type: 'answer_replace', data: answerText, requestId }
-                  : { type: 'answer_replace', data: answerText }),
-              })
-            }
-          } catch (error) {
-            if (c.req.raw.signal.aborted) throw error
-            // Citation repair is a bounded quality pass. The original grounded
-            // answer remains usable if the editor is unavailable.
           }
+          finishCitationRepair('ok', {
+            accepted: repaired != null,
+            finalCoveragePct: quality.citationCoveragePct,
+          })
+        } else {
+          executionTrace.mark('citation_repair', {
+            needed: false,
+            citationCoveragePct: quality.citationCoveragePct,
+          }, 'skipped')
         }
         await stream.writeSSE({ event: 'message', data: JSON.stringify(requestId ? { type: 'quality', data: quality, requestId } : { type: 'quality', data: quality }) })
         await stream.writeSSE({ event: 'message', data: JSON.stringify(requestId ? { type: 'metrics', data: { ...metrics, model: actualModel, endToEndMs: Date.now() - requestStartedAt }, requestId } : { type: 'metrics', data: { ...metrics, model: actualModel, endToEndMs: Date.now() - requestStartedAt } }) })
@@ -5620,6 +5929,10 @@ ${webSection}${localSection}
           return
         }
 
+        executionTrace.mark('query_complete', {
+          outcome: 'succeeded',
+          elapsedMs: Date.now() - requestStartedAt,
+        })
         await completeQueryRecordSafely(queryRecordStarted, requestId, {
           outcome: 'succeeded',
           actualModel,

@@ -73,7 +73,7 @@ describe('grounded answer degradation', () => {
 
     expect(response.status).toBe(200)
     expect(sourceEvent.data.web).toEqual([])
-    expect(sourceEvent.data.local).toHaveLength(15)
+    expect(sourceEvent.data.local).toHaveLength(12)
     expect(stream).toContain('"type":"done"')
 
     const recordResponse = await app.request(`/api/queries/${requestId}`)
@@ -101,7 +101,7 @@ describe('grounded answer degradation', () => {
         state: 'ok',
         rawCandidateCount: 15,
         usableCandidateCount: 15,
-        selectedCount: 15,
+        selectedCount: 12,
       },
       fallbackAttempted: true,
     })
@@ -175,7 +175,7 @@ describe('grounded answer degradation', () => {
     expect(events.some((event) => event.type === 'done')).toBe(true)
   }, 10_000)
 
-  it('repairs incomplete sentence-level citations and stops once target coverage is reached', async () => {
+  it('does not spend another model call when deterministic citation cleanup cannot safely repair the draft', async () => {
     __test__.setKnowledgeIndex([{
       id: 'vault:repair',
       filePath: '/home/user/vault/citation-repair.md',
@@ -229,19 +229,14 @@ describe('grounded answer degradation', () => {
       record: { answerText: string; grounding: { citationCoveragePct: number } }
     }
 
-    expect(llmCalls).toBe(2)
-    expect(citationRepairPrompt).toContain('<<<UNCITED_CLAIMS>>>')
-    expect(citationRepairPrompt).toContain('The documented scheduler uses a bounded queue without citation.')
-    expect(citationRepairPrompt).not.toContain('Backpressure is applied whenever that queue becomes full [L1].')
-    expect(citationRepairPrompt).toContain('You may add or repeat only valid supplied citation identifiers')
-    expect(citationRepairPrompt).toContain('multi-sentence quotation covers only the final sentence')
-    expect(citationRepairPrompt).not.toContain('Do not add facts, interpretations, sources, or citation identifiers.')
-    expect(stream.match(/"type":"answer_replace"/g)).toHaveLength(1)
-    expect(record.answerText).toContain('bounded queue [L1]')
-    expect(record.grounding.citationCoveragePct).toBe(100)
+    expect(llmCalls).toBe(1)
+    expect(citationRepairPrompt).toBe('')
+    expect(stream.match(/"type":"answer_replace"/g)).toBeNull()
+    expect(record.answerText).toContain('bounded queue without citation')
+    expect(record.grounding.citationCoveragePct).toBe(50)
   })
 
-  it('runs a second bounded repair pass when the first improves but remains below target', async () => {
+  it('never runs repeated model repair passes for a weak draft', async () => {
     __test__.setKnowledgeIndex([{
       id: 'vault:two-pass-repair',
       filePath: '/home/user/vault/two-pass-citation-repair.md',
@@ -313,14 +308,15 @@ describe('grounded answer degradation', () => {
       record: { answerText: string; grounding: { citationCoveragePct: number } }
     }
 
-    expect(llmCalls).toBe(3)
-    expect(repairCalls).toBe(2)
-    expect(stream.match(/"type":"answer_replace"/g)).toHaveLength(2)
-    expect(record.answerText).toBe(secondPass)
-    expect(record.grounding.citationCoveragePct).toBe(100)
+    expect(llmCalls).toBe(1)
+    expect(repairCalls).toBe(0)
+    expect(stream.match(/"type":"answer_replace"/g)).toBeNull()
+    expect(record.answerText).not.toBe(firstPass)
+    expect(record.answerText).not.toBe(secondPass)
+    expect(record.grounding.citationCoveragePct).toBeLessThan(80)
   })
 
-  it('uses a citation-preserving cleanup after a non-improving source-aware edit', async () => {
+  it('does not invoke model cleanup for scope-marker mistakes', async () => {
     __test__.setKnowledgeIndex([{
       id: 'vault:cleanup-retry',
       filePath: '/home/user/vault/cleanup-retry.md',
@@ -402,15 +398,12 @@ describe('grounded answer degradation', () => {
       record: { answerText: string; grounding: { citationCoveragePct: number } }
     }
 
-    expect(llmCalls).toBe(3)
-    expect(repairSystemPrompts).toHaveLength(2)
-    expect(repairSystemPrompts[0]).toContain('<<<SOURCE_PACK>>>')
-    expect(repairSystemPrompts[1]).not.toContain('<<<SOURCE_PACK>>>')
-    expect(repairSystemPrompts[1]).toContain('Do not add facts or citations')
-    expect(repairSystemPrompts[1]).not.toContain('You may add or repeat only valid supplied citation identifiers')
-    expect(stream.match(/"type":"answer_replace"/g)).toHaveLength(1)
-    expect(record.answerText).toBe(cleanup)
-    expect(record.grounding.citationCoveragePct).toBe(100)
+    expect(llmCalls).toBe(1)
+    expect(repairSystemPrompts).toHaveLength(0)
+    expect(stream.match(/"type":"answer_replace"/g)).toBeNull()
+    expect(record.answerText).toBe(draft)
+    expect(record.answerText).not.toBe(cleanup)
+    expect(record.grounding.citationCoveragePct).toBeLessThan(80)
   })
 
   it('retrieves on a standalone query while answering the user-visible follow-up', async () => {

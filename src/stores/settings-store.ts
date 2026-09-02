@@ -48,8 +48,10 @@ interface SettingsState {
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set, get) => ({
-      llmEndpoint: 'http://127.0.0.1:8080',
-      searxngEndpoint: 'http://127.0.0.1:8888',
+      // Provider endpoints are server-managed through environment variables;
+      // the browser never needs machine-specific host or port defaults.
+      llmEndpoint: '',
+      searxngEndpoint: '',
       selectedModel: DEFAULT_MODEL,
       availableModels: [],
       configuredDefault: DEFAULT_MODEL,
@@ -171,8 +173,8 @@ export const useSettingsStore = create<SettingsState>()(
       migrate: (persistedState) => {
         const state = (persistedState ?? {}) as Partial<SettingsState>
         return {
-          llmEndpoint: state.llmEndpoint ?? 'http://127.0.0.1:8080',
-          searxngEndpoint: state.searxngEndpoint ?? 'http://127.0.0.1:8888',
+          llmEndpoint: state.llmEndpoint ?? '',
+          searxngEndpoint: state.searxngEndpoint ?? '',
           selectedModel: state.selectedModel?.trim() || DEFAULT_MODEL,
           searchResultsCount: state.searchResultsCount ?? 10,
           showThinking: state.showThinking ?? true,

@@ -169,6 +169,7 @@ Container users must explicitly mount a selected browser-history database read-o
 | `LLM_URL` | `http://127.0.0.1:8080` | Local inference server root; public endpoints are rejected |
 | `LLM_MODEL` | First advertised model | Optional preferred local model |
 | `LLM_FALLBACK_MODEL` | Empty | Optional fallback among advertised local models |
+| `KEEPINDEX_EMBEDDING_MODEL` | Empty | Optional local OpenAI-compatible embedding model used to rerank lexical knowledge candidates |
 
 KeepIndex reads only the canonical variables in this table. Generic local-provider variables remain generic because they describe user-selected engines rather than the KeepIndex product namespace.
 

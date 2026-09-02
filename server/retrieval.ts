@@ -337,7 +337,11 @@ export function deriveLocalRetrievalQueries(input: string, limit = 3): string[] 
  * clauses, repositories, versions, and question subjects without turning one
  * answer into an unbounded research crawl.
  */
-export function deriveDiscoveryQueries(input: string, limit = 3): string[] {
+export function deriveDiscoveryQueries(
+  input: string,
+  limit = 3,
+  includeConciseVariant = false
+): string[] {
   const boundedLimit = Math.max(1, Math.min(3, Math.trunc(limit)))
   const original = normalizeQueryWhitespace(input)
   const variants = deriveRankingQueries(input, 16)
@@ -368,10 +372,33 @@ export function deriveDiscoveryQueries(input: string, limit = 3): string[] {
     if (repository) priorityVariants.push(`${repository} releases stable${year ? ` ${year}` : ''}`)
   }
 
+  // Natural-language person lookups are unusually ambiguous on metasearch
+  // engines: filler words can dominate and a reversed or partial name often
+  // outranks the exact person. Preserve the user's query, then add bounded
+  // biography/profile branches so first-party identity pages can compete
+  // without assuming which same-named person was intended.
+  const personLookup = /^who\s+is\s+([\p{L}][\p{L}.'’\-]*(?:\s+[\p{L}][\p{L}.'’\-]*){1,3})\s*[?!.]*$/iu.exec(original)
+  if (personLookup) {
+    const name = personLookup[1].trim()
+    priorityVariants.push(`${name} official biography`, `${name} profile affiliation`)
+  }
+
+  // Long conversational questions often search poorly verbatim. When no
+  // specialized plan above applies, add one deterministic keyword branch that
+  // keeps the same user-supplied terms but drops grammatical filler. This is
+  // bounded to one extra request and runs concurrently with the original.
+  if (includeConciseVariant && priorityVariants.length === 0) {
+    const conciseTerms = tokenizeQuery(original).slice(0, 9)
+    const originalWordCount = original.split(/\s+/).filter(Boolean).length
+    if (conciseTerms.length >= 4 && originalWordCount > conciseTerms.length) {
+      priorityVariants.push(conciseTerms.join(' '))
+    }
+  }
+
   const orderedVariants = [variants[0] ?? original, ...priorityVariants, ...variants.slice(1)]
   for (const variant of orderedVariants) {
     const cleaned = normalizeQueryWhitespace(variant.replace(/\.md\b/gi, ''))
-    const key = queryVariantKey(cleaned)
+    const key = cleaned.toLowerCase()
     if (!cleaned || seen.has(key)) continue
     const terms = tokenizeQuery(cleaned)
     const explicitTwoTermAnchor = terms.length >= 2 && (
@@ -824,9 +851,13 @@ export function queryRelevance(query: string, result: RankedSearchResult): numbe
   const closeProximity = !exactPhrase && (
     hasCloseTokenWindow(tokens, title) || hasCloseTokenWindow(tokens, snippet)
   )
-  const phraseBonus = exactPhrase ? 0.12 : closeProximity ? 0.06 : 0
+  // Ordered identity phrases must beat reversed-name collisions even when the
+  // latter appear in more engines. Proximity remains a weak recall signal for
+  // prose queries, not a substitute for an exact person or product name.
+  const phraseBonus = exactPhrase ? 0.3 : closeProximity ? 0.02 : 0
 
-  return Math.min(1, base * coverageAttenuation + completeCoverageBonus + phraseBonus)
+  const relevance = base * coverageAttenuation + completeCoverageBonus + phraseBonus
+  return Math.min(exactPhrase ? 1 : closeProximity ? 0.92 : 1, relevance)
 }
 
 /** 0..1, saturating at four engines. Cross-engine agreement is a strong prior. */

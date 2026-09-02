@@ -25,7 +25,8 @@ bun.lockb
 *:Zone.Identifier
 Zone.Identifier
 
-# Env
+# Machine-local runtime configuration
 .env
 .env.local
 .env.*.local
+compose.override.yml

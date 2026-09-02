@@ -271,7 +271,7 @@ describe('durable query-record routes', () => {
     expect(record.timings.tokensPerSecond).toBe(65.5)
     expect(record.timings.endToEndMs).toBeGreaterThanOrEqual(0)
     expect(record.sourceCount).toBe(1)
-    expect(record.candidateSourceCount).toBe(1)
+    expect(record.candidateSourceCount).toBe(2)
     expect(record.degraded).toBe(false)
     expect(record.outcome).toBe('succeeded')
     expect(record.error).toBeNull()
@@ -300,7 +300,7 @@ describe('durable query-record routes', () => {
       requestedModel: DEFAULT_MODEL,
       actualModel: servedModel,
       sourceCount: 1,
-      candidateSourceCount: 1,
+      candidateSourceCount: 2,
       degraded: false,
       outcome: 'succeeded',
     })
