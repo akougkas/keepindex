@@ -1,305 +1,68 @@
 ---
 import Layout from "@/layouts/BaseLayout.astro";
-import Section from "@/components/Wrapper/Section.astro";
-import ContentWrapper from "@/components/Wrapper/ContentWrapper.astro";
-import Heading from "@/components/Typography/Heading.astro";
-import Eyebrow from "@/components/Typography/Eyebrow.astro";
-import Paragraph from "@/components/Typography/Paragraph.astro";
-import ButtonWrapper from "@/components/Wrapper/ButtonWrapper.astro";
-import Button from "@/components/Button.astro";
-import Grid from "@/components/Wrapper/Grid.astro";
-import Card from "@/components/Item/Card.astro";
-import Accordion from "@/components/Interactive/Accordion.astro";
-import AccordionItem from "@/components/Interactive/AccordionItem.astro";
-import ContentArchitectureGraphic from "@/components/Interactive/ContentArchitectureGraphic.astro";
+import ContentGuide from "@/components/Item/ContentGuide.astro";
+const content = {
+  eyebrow: "Architecture",
+  title: "One computer. A clear boundary.",
+  intro:
+    "The app runs where the sources live. Local processes and Docker containers work together within one installation.",
+  sections: [
+    {
+      id: "single-machine",
+      title: "Your local application",
+      paragraphs: [
+        "The browser UI and Hono API run together on localhost:5173. A local SQLite database holds the index, settings, history, and evidence records. The default Docker volume retains this data across container restarts.",
+        "Docker publishes only to loopback. Native development and production bind to loopback. The API rejects remote hostnames and foreign browser origins before executing requests. This is a personal application with no multi-user authentication.",
+      ],
+    },
+    {
+      id: "sources",
+      title: "Explicit filesystem access",
+      paragraphs: [
+        "Selected source folders are mounted read-only into the container. You then register their container paths in Knowledge resources. Indexing copies extracted text into the local SQLite index; original files are not uploaded to the product web host.",
+        "Browser profiles follow the same explicit grant. The UI lets you choose which discovered profiles to import. Native installations can discover accessible profiles on the same machine.",
+      ],
+    },
+    {
+      id: "compute",
+      title: "Your choice of AI endpoint",
+      paragraphs: [
+        "The index stays on this computer. AI connects through an independently selected profile: a local Lemonade, LM Studio, Ollama, or llama.cpp runtime, a private gateway such as Blade, or another compatible HTTP(S) endpoint.",
+        "The selected endpoint and whether it is local or remote are visible in the app. Selecting remote AI sends prompts, conversation context, and retrieved excerpts to it. KeepIndex never automatically switches between local and remote connections.",
+      ],
+      link: {
+        href: "/inference",
+        label: "Connect local AI",
+      },
+    },
+    {
+      id: "internet",
+      title: "The web is still the web",
+      paragraphs: [
+        "SearXNG runs in a container on the same computer. When you include web results, it sends search terms to public engines, and KeepIndex can fetch source pages. Those destinations receive normal network requests.",
+        "Choose Files, Vaults, Docs, or History to retrieve that local source category without web discovery. All and Web explicitly include public engines.",
+      ],
+    },
+    {
+      id: "devices",
+      title: "What happens on another device",
+      paragraphs: [
+        "Opening keepindex.ing on a phone shows this product site. It does not pair with your laptop or expose its files. Another computer can run its own independent KeepIndex installation.",
+        "Federation, remote viewing, source agents, and network-wide discovery are deferred. An OS-mounted network share can look like a normal folder, but indexing it would copy extracted content to the indexing computer; it is not source-resident federation.",
+      ],
+    },
+    {
+      id: "hosting",
+      title: "Product hosting is separate",
+      paragraphs: [
+        "The product website is a static build on a separate web host. It holds public website assets only.",
+        "Your personal installation runs on your computer. Visiting the product website does not expose it or connect it to the web host.",
+      ],
+    },
+  ],
+};
 ---
 
-<Layout
-  title="System Architecture & Homelab Deployment"
-  description="Deep architectural blueprint of KeepIndex: Docker networking, loopback isolation, homelab cluster topologies, SQLite WAL persistence, and security posture."
-  theme="dark"
+<Layout title={content.title} description={content.intro}
+  ><ContentGuide {...content} /></Layout
 >
-  {/* 1. Architecture Hero */}
-  <Section paddingTop="large" paddingBottom="medium">
-    <ContentWrapper variant="stack" centered={true}>
-      <Eyebrow variant="tag">Infrastructure &amp; Topologies</Eyebrow>
-      <Heading tag="h1" variant="display" maxWidth={26}>
-        Engineered for the self-host ecosystem.
-      </Heading>
-      <Paragraph maxWidth={54} variant="large">
-        KeepIndex is designed from the ground up for homelab servers, private networks, and privacy-first workstations. Clean port separation, strict network boundaries, and zero unauthenticated public exposure.
-      </Paragraph>
-      <ButtonWrapper>
-        <Button element="link" href="/docs" emphasis="primary">Docker Deployment</Button>
-        <Button element="link" href="#homelab" emphasis="secondary">Homelab Patterns ↓</Button>
-      </ButtonWrapper>
-    </ContentWrapper>
-  </Section>
-
-  {/* 2. Scaling Graphic */}
-  <Section paddingTop="medium" paddingBottom="large">
-    <ContentWrapper variant="stack">
-      <Eyebrow>Dataflow</Eyebrow>
-      <Heading tag="h2" variant="h1" maxWidth={30}>
-        Complete System Architecture Diagram
-      </Heading>
-      <Paragraph maxWidth={52}>
-        Notice the physical containment boundary: all retrieval, fusion, local model generation, and grounding gates reside inside your user-controlled network.
-      </Paragraph>
-
-      <ContentArchitectureGraphic />
-    </ContentWrapper>
-  </Section>
-
-  {/* 3. Networking & Port Design */}
-  <Section paddingTop="medium" paddingBottom="large">
-    <ContentWrapper variant="stack">
-      <Eyebrow>Port Segregation</Eyebrow>
-      <Heading tag="h2" variant="h1" maxWidth={30}>
-        Dual-Port Architecture &amp; Bind Isolation
-      </Heading>
-      <Paragraph maxWidth={54}>
-        Sharing a search interface on your private network should never expose administrative or upstream search endpoints.
-      </Paragraph>
-
-      <Grid medium={2} large={2} class="arch_grid">
-        <Card
-          eyebrow="PORT 5173 · APPLICATION INGRESS"
-          heading="KeepIndex UI &amp; API"
-          text="The installable PWA application shell and Hono REST/SSE API serve together on port 5173. By default, it binds to host loopback 127.0.0.1. Set KEEPINDEX_BIND_ADDRESS to bind to a specific RFC1918 LAN interface or Tailscale IP (e.g., 100.64.0.0/10) when sharing across devices in your home."
-          theme="dark"
-        />
-
-        <Card
-          eyebrow="PORT 8888 · RETRIEVAL WORKER"
-          heading="SearXNG Engine (Loopback Locked)"
-          text="SearXNG handles outbound web meta-search. It has an independent KEEPINDEX_SEARXNG_BIND_ADDRESS that remains locked to 127.0.0.1 even if you deliberately share the KeepIndex UI across your local LAN. Your home network cannot call SearXNG directly."
-          theme="dark"
-        />
-      </Grid>
-    </ContentWrapper>
-  </Section>
-
-  {/* 4. Homelab Multi-Node Topologies */}
-  <Section paddingTop="medium" paddingBottom="large" id="homelab">
-    <ContentWrapper variant="stack">
-      <Eyebrow>Homelab Blueprint</Eyebrow>
-      <Heading tag="h2" variant="h1" maxWidth={32}>
-        Multi-Node Homelab Topologies
-      </Heading>
-      <Paragraph maxWidth={54}>
-        Whether running on a single laptop, an N100 mini PC, or a multi-node cluster with dedicated GPU workers, KeepIndex fits your homelab setup cleanly.
-      </Paragraph>
-
-      <div class="homelab_diagram_card">
-        <div class="homelab_diagram_header">
-          <span class="homelab_tag">Cluster Topology: Gateway + Inference Node + Backup Server</span>
-        </div>
-        <div class="homelab_diagram_body">
-          <div class="node_box">
-            <div class="node_title">Gateway &amp; Web Edge (e.g. blade)</div>
-            <div class="node_ip">192.168.86.140 / Tailscale</div>
-            <ul class="node_items">
-              <li>Traefik reverse proxy (Host: keepindex.ing)</li>
-              <li>Cloudflare Tunnel ingress</li>
-              <li>KeepIndex PWA / API (Port 5173)</li>
-              <li>SearXNG worker (Port 8888 loopback)</li>
-            </ul>
-          </div>
-
-          <div class="node_arrow">
-            <span>2.5G LAN / Tailscale</span>
-            <span>LLM_URL query ➔</span>
-          </div>
-
-          <div class="node_box ai">
-            <div class="node_title">Dedicated Inference Node (e.g. mini / GPU)</div>
-            <div class="node_ip">192.168.86.141 / Tailscale</div>
-            <ul class="node_items">
-              <li>llama.cpp / vLLM / Ollama</li>
-              <li>NVIDIA CUDA / AMD ROCm accelerator</li>
-              <li>Bound to LAN / Tailscale 0.0.0.0:8080</li>
-              <li>Host firewall restricts to gateway IP</li>
-            </ul>
-          </div>
-        </div>
-        <div class="homelab_diagram_footer">
-          <span>Storage &amp; Backups: SQLite in WAL mode backed up nightly via automated snapshot timers.</span>
-        </div>
-      </div>
-    </ContentWrapper>
-  </Section>
-
-  {/* 5. Security Posture */}
-  <Section paddingTop="medium" paddingBottom="large">
-    <ContentWrapper variant="stack">
-      <Eyebrow>Security Posture</Eyebrow>
-      <Heading tag="h2" variant="h1" maxWidth={30}>
-        Fail-Closed Security Commitments
-      </Heading>
-      <Paragraph maxWidth={50}>
-        Local-first does not mean magically secure without discipline. KeepIndex implements strict defenses against local traversal and prompt injection.
-      </Paragraph>
-
-      <Grid medium={2} large={3} class="arch_grid">
-        <Card
-          eyebrow="SECURITY 01"
-          heading="Root Containment"
-          text="A local file can only be read through the API when it remains inside an explicitly indexed directory. Path traversal attempts (../) and symbolic links pointing outside allowed roots fail closed."
-          theme="dark"
-        />
-
-        <Card
-          eyebrow="SECURITY 02"
-          heading="Secret & Dotfile Exclusion"
-          text="Credential-like dotfiles, private keys (.pem, .key), API tokens, password files, and .env files are automatically excluded before indexing. They never enter the SQLite chunk index."
-          theme="dark"
-        />
-
-        <Card
-          eyebrow="SECURITY 03"
-          heading="CORS & Origin Locking"
-          text="Wildcard CORS is prohibited. Browser cross-origin calls are restricted to loopback, private RFC1918 origins, and explicit KEEPINDEX_ALLOWED_ORIGINS. Request bodies are clamped to 3 MB."
-          theme="dark"
-        />
-      </Grid>
-    </ContentWrapper>
-  </Section>
-
-  {/* 6. FAQ */}
-  <Section paddingTop="medium" paddingBottom="large">
-    <ContentWrapper variant="stack">
-      <Eyebrow>Questions</Eyebrow>
-      <Heading tag="h2" variant="h1">Architecture FAQs</Heading>
-
-      <Accordion single={true} openFirst={true}>
-        <AccordionItem heading="Why is SQLite WAL mode used instead of PostgreSQL or a vector database?">
-          <p>
-            SQLite WAL (Write-Ahead Logging) provides incredible single-file portability, sub-millisecond query execution, zero operational overhead, and effortless backups. A single file backup copies your complete search history, collections, and indexed chunks without running heavy database containers.
-          </p>
-        </AccordionItem>
-
-        <AccordionItem heading="How do I mount local folders from the host into Docker?">
-          <p>
-            Use <code>compose.override.yml</code>. Docker containers cannot see host files unless you explicitly mount them. Mount your Obsidian vault or project directories read-only under <code>/home/keepindex/knowledge</code> and add that path in the UI.
-          </p>
-        </AccordionItem>
-
-        <AccordionItem heading="Can I access KeepIndex remotely via Tailscale?">
-          <p>
-            Yes. Tailscale IP ranges (<code>100.64.0.0/10</code>) are recognized as valid private boundaries. You can access your KeepIndex PWA from your phone or laptop while away from home without publishing ports to the public internet.
-          </p>
-        </AccordionItem>
-      </Accordion>
-    </ContentWrapper>
-  </Section>
-</Layout>
-
-<style is:global>
-  @layer components {
-    .arch_grid {
-      margin-top: var(--space-4);
-    }
-
-    .homelab_diagram_card {
-      background-color: var(--dark-900);
-      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 14%, transparent);
-      border-radius: var(--radius-main);
-      overflow: hidden;
-      margin-top: var(--space-4);
-      display: flex;
-      flex-direction: column;
-    }
-
-    .homelab_diagram_header {
-      background-color: var(--dark-800);
-      padding: var(--space-3) var(--space-4);
-      border-bottom: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 10%, transparent);
-    }
-
-    .homelab_tag {
-      font-family: var(--font-mono);
-      font-size: 0.8125rem;
-      color: var(--brand-green);
-    }
-
-    .homelab_diagram_body {
-      padding: var(--space-5);
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-4);
-      align-items: center;
-      justify-content: center;
-      @media (width >= 48rem) {
-        flex-direction: row;
-        gap: var(--space-5);
-      }
-    }
-
-    .node_box {
-      flex: 1;
-      background-color: var(--dark-800);
-      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 14%, transparent);
-      border-radius: var(--radius-small);
-      padding: var(--space-4);
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-2);
-      width: 100%;
-
-      &.ai {
-        border-color: color-mix(in lab, var(--brand-green) 40%, transparent);
-      }
-    }
-
-    .node_title {
-      font-family: var(--display-family);
-      font-weight: 700;
-      font-size: 1.05rem;
-      color: var(--brand-ivory);
-    }
-
-    .node_ip {
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      color: var(--brand-green);
-    }
-
-    .node_items {
-      list-style: none;
-      padding: 0;
-      margin-top: var(--space-2);
-      display: flex;
-      flex-direction: column;
-      gap: 0.35rem;
-      font-size: var(--text-small);
-      color: var(--brand-stone);
-
-      li::before {
-        content: "• ";
-        color: var(--brand-green);
-      }
-    }
-
-    .node_arrow {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0.25rem;
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      color: var(--brand-stone);
-      padding: var(--space-2);
-      text-align: center;
-    }
-
-    .homelab_diagram_footer {
-      background-color: var(--dark-800);
-      padding: var(--space-3) var(--space-4);
-      border-top: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 10%, transparent);
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      color: var(--brand-stone);
-    }
-  }
-</style>

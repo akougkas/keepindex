@@ -2,34 +2,16 @@ import { describe, expect, it } from 'bun:test'
 import {
   LOCAL_INFERENCE_REDIRECT_POLICY,
   inspectInferenceEndpoint,
-  requireLocalInferenceEndpoint,
+  requireInferenceEndpoint,
   resolveInferenceAdapter,
 } from './inference-endpoint-policy'
 
-describe('local-only inference endpoint policy', () => {
+describe('configured inference endpoint policy', () => {
   it('requires fetch callers to reject redirects away from the local endpoint', () => {
     expect(LOCAL_INFERENCE_REDIRECT_POLICY).toBe('error')
   })
 
-  const allowed = [
-    'http://127.0.0.1:8080',
-    'http://localhost:8080/',
-    'http://llama:8080',
-    'http://llama_cpp:8080',
-    'http://host.docker.internal:8080',
-    'https://inference.local:8443',
-    'http://models.lan:8080',
-    'http://inference.internal:8080',
-    'http://inference.home.arpa:8080',
-    'http://10.12.0.4:8080',
-    'http://172.31.255.254:8080',
-    'http://192.168.50.2:8080',
-    'http://100.64.0.1:8080',
-    'http://100.127.255.254:8080',
-    'http://[::1]:8080',
-    'http://[fd12:3456::8]:8080',
-    'http://[fe80::8]:8080',
-  ]
+  const allowed = ['http://127.0.0.1:8080', 'http://localhost:8080/', 'http://llama:8080', 'http://llama_cpp:8080', 'http://host.docker.internal:8080', 'http://inference:8080', 'http://ollama:11434', 'http://[::1]:8080']
 
   for (const endpoint of allowed) {
     it(`allows ${endpoint}`, () => {
@@ -38,21 +20,15 @@ describe('local-only inference endpoint policy', () => {
   }
 
   const rejected: Array<[string, string]> = [
-    ['https://api.openai.com/v1', 'known-cloud-host'],
-    ['https://api.anthropic.com', 'known-cloud-host'],
-    ['https://generativelanguage.googleapis.com', 'known-cloud-host'],
-    ['https://example.com', 'public-host-forbidden'],
-    ['https://example.', 'public-host-forbidden'],
-    ['http://8.8.8.8:8080', 'public-host-forbidden'],
-    ['http://172.32.0.1:8080', 'public-host-forbidden'],
-    ['http://169.254.2.3:8080', 'public-host-forbidden'],
-    ['http://100.63.255.254:8080', 'public-host-forbidden'],
-    ['http://100.128.0.1:8080', 'public-host-forbidden'],
-    ['https://private-tailnet.ts.net', 'public-host-forbidden'],
     ['ftp://localhost/model', 'unsupported-protocol'],
     ['http://user:secret@localhost:8080', 'credentials-forbidden'],
     ['http://localhost:8080?token=secret', 'query-or-fragment-forbidden'],
+    ['https://api.example.com/v1#secret', 'query-or-fragment-forbidden'],
+    ['not-a-url', 'invalid-url'],
   ]
+  for (const url of ['http://100.124.181.9:4000', 'http://192.168.1.20:8080', 'https://api.openai.com/v1', 'https://custom.example/v1']) {
+    it(`accepts an explicitly configured remote endpoint ${url}`, () => expect(inspectInferenceEndpoint(url).allowed).toBe(true))
+  }
 
   for (const [endpoint, reason] of rejected) {
     it(`rejects ${endpoint}`, () => {
@@ -61,15 +37,15 @@ describe('local-only inference endpoint policy', () => {
   }
 
   it('normalizes a safe base URL without changing a configured path', () => {
-    expect(requireLocalInferenceEndpoint('http://localhost:8080/gateway/'))
+    expect(requireInferenceEndpoint('http://localhost:8080/gateway/'))
       .toBe('http://localhost:8080/gateway')
   })
 
   it('does not echo a credential-bearing endpoint in its error', () => {
-    expect(() => requireLocalInferenceEndpoint('http://admin:very-secret@localhost:8080'))
+    expect(() => requireInferenceEndpoint('http://admin:very-secret@localhost:8080'))
       .toThrow('credentials-forbidden')
     try {
-      requireLocalInferenceEndpoint('http://admin:very-secret@localhost:8080')
+      requireInferenceEndpoint('http://admin:very-secret@localhost:8080')
     } catch (error) {
       expect(String(error)).not.toContain('very-secret')
       expect(String(error)).not.toContain('admin')

@@ -1,3 +1,4 @@
+import { isLoopbackHostname, requireLocalSearchEndpoint } from '../server/local-service-policy'
 import { spawn, spawnSync } from 'node:child_process'
 import { accessSync, constants, existsSync, statSync } from 'node:fs'
 import { createServer } from 'node:net'
@@ -183,7 +184,7 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
 const MAIN_HELP = `keepidx — KeepIndex local operations
 
 Search your world. Keep it yours.
-Private, local-first federated search.
+Private search on your computer. Your choice of AI.
 
 Usage:
   keepidx <command> [options]
@@ -219,7 +220,7 @@ Options:
 
 Check Bun, Docker, Docker Compose, endpoint safety, database path safety,
 required ports, and local provider reachability. Native Ollama and
-OpenAI-compatible local servers are supported. No secrets are printed.
+OpenAI-compatible local servers and remote gateways are supported. No secrets are printed.
 
 Options:
   --url <url>        Override the local application URL
@@ -290,7 +291,9 @@ export function resolveKeepIndexUrl(
 ): string {
   const configuredUrl = env.KEEPINDEX_URL?.trim() || undefined
   const value = explicitUrl ?? configuredUrl
-  return normalizeHttpUrl(value ?? DEFAULT_KEEPINDEX_URL, 'KeepIndex URL')
+  const url = normalizeHttpUrl(value ?? DEFAULT_KEEPINDEX_URL, 'KeepIndex URL')
+  if (!isLoopbackHostname(new URL(url).hostname)) throw new CliUsageError('KeepIndex URL must use loopback on this computer')
+  return url
 }
 
 export function resolveProviderUrl(
@@ -309,10 +312,9 @@ function isPrivateIpv4(hostname: string): boolean {
 }
 
 /**
- * Inference is deliberately constrained to the user's machine or private
- * network. Public/vendor hosts would silently change KeepIndex's privacy model.
+ * Inference may use any explicitly configured compatible endpoint.
  */
-export function isPrivateInferenceUrl(value: string): boolean {
+export function isValidInferenceUrl(value: string): boolean {
   return inspectInferenceEndpoint(value).allowed
 }
 
@@ -323,7 +325,7 @@ function safeUrlForDisplay(value: string): string {
     parsed.password = ''
     parsed.search = ''
     parsed.hash = ''
-    return parsed.toString().replace(/\/$/, '')
+    return parsed.origin
   } catch {
     return '<invalid URL>'
   }
@@ -374,7 +376,7 @@ export function formatPlainStatus(status: KeepIndexStatus): string {
     `KeepIndex: ${status.status} (${score})`,
     `URL: ${status.url}`,
     `SearXNG: ${status.providers.searxng ? 'ready' : 'unavailable'}`,
-    `Local inference: ${status.providers.localInference ? 'ready' : 'unavailable'}`,
+    `AI endpoint: ${status.providers.localInference ? 'ready' : 'unavailable'}`,
     `Database: ${status.database.available ? 'ready' : 'unavailable'}${databaseDetail}`,
     `Index: ${status.index.resources} resources; ${status.index.unavailable} unavailable`,
     `Models: ${status.models.count}${modelDetail}`,
@@ -629,7 +631,7 @@ async function runDoctor(
     checks.push({ level: 'fail', label: 'KeepIndex URL', detail: 'invalid local HTTP(S) endpoint' })
   }
   try {
-    searxngUrl = resolveProviderUrl(env, 'SEARXNG_URL')
+    searxngUrl = requireLocalSearchEndpoint(resolveProviderUrl(env, 'SEARXNG_URL'))
     checks.push({ level: 'ok', label: 'SearXNG URL', detail: safeUrlForDisplay(searxngUrl) })
   } catch {
     checks.push({ level: 'fail', label: 'SearXNG URL', detail: 'invalid HTTP(S) endpoint' })
@@ -649,18 +651,18 @@ async function runDoctor(
   }
   try {
     llmUrl = resolveProviderUrl(env, 'LLM_URL')
-    if (!isPrivateInferenceUrl(llmUrl)) {
+    if (!isValidInferenceUrl(llmUrl)) {
       checks.push({
         level: 'fail',
         label: 'Inference policy',
-        detail: 'LLM_URL must resolve to a local or private-network endpoint',
+        detail: 'LLM_URL must be a valid HTTP(S) inference endpoint',
       })
       llmUrl = null
     } else {
       checks.push({ level: 'ok', label: 'Inference URL', detail: safeUrlForDisplay(llmUrl) })
     }
   } catch {
-    checks.push({ level: 'fail', label: 'Inference URL', detail: 'invalid private HTTP(S) endpoint' })
+    checks.push({ level: 'fail', label: 'Inference URL', detail: 'invalid HTTP(S) inference endpoint' })
   }
 
   const databasePath = resolveDatabasePath(env, cwd)
@@ -676,10 +678,10 @@ async function runDoctor(
   type EndpointEntry = { label: string; base: string; probes: string[]; headers?: Record<string, string>; redirect?: RequestInit['redirect'] }
   const endpoints: EndpointEntry[] = []
   if (appUrl) endpoints.push({ label: 'KeepIndex port', base: appUrl, probes: [appendEndpoint(appUrl, '/api/health')] })
-  if (searxngUrl) endpoints.push({ label: 'SearXNG port', base: searxngUrl, probes: [appendEndpoint(searxngUrl, '/healthz')] })
+  if (searxngUrl) endpoints.push({ label: 'SearXNG port', base: searxngUrl, probes: [appendEndpoint(searxngUrl, '/healthz')], redirect: 'error' })
   if (llmUrl && inferenceAdapter) {
     endpoints.push({
-      label: 'Local inference port',
+      label: 'AI endpoint port',
       base: llmUrl,
       headers: llmApiKey ? { Authorization: `Bearer ${llmApiKey}` } : undefined,
       redirect: LOCAL_INFERENCE_REDIRECT_POLICY,
@@ -700,7 +702,7 @@ async function runDoctor(
   for (const endpoint of endpoints) {
     const port = endpointPort(endpoint.base)
     if (port === null) {
-      checks.push({ level: 'ok', label: endpoint.label, detail: 'remote/private endpoint; local bind check not applicable' })
+      checks.push({ level: 'ok', label: endpoint.label, detail: 'configured endpoint; reachability checked through HTTP' })
       continue
     }
     const state = await probePort(port)
@@ -733,11 +735,11 @@ async function runDoctor(
     })
   }
   if (llmUrl) {
-    const inferenceEndpoint = endpoints.find((endpoint) => endpoint.label === 'Local inference port')
+    const inferenceEndpoint = endpoints.find((endpoint) => endpoint.label === 'AI endpoint port')
     const reachable = inferenceEndpoint?.probes.some((probe) => reachability.get(probe) === true) === true
     checks.push({
       level: reachable ? 'ok' : 'warn',
-      label: 'Local inference',
+      label: 'AI endpoint',
       detail: reachable ? 'reachable' : 'unreachable; answers will remain gracefully degraded',
     })
   }

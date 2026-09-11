@@ -293,13 +293,23 @@ describe('OpenAI-compatible actual-model observation', () => {
   })
 })
 
+describe('Lemonade public model identity', () => {
+  it('keeps the selected catalog ID when a completion reports a backend file path', async () => {
+    const mock = fetchStub(() => Response.json({ model: 'C:\\Users\\person\\.cache\\huggingface\\model.gguf', choices: [{ message: { content: 'Ready.' } }] }))
+    const transport = new LocalInferenceTransport('http://localhost:13305/api', resolveInferenceAdapter({ KEEPINDEX_INFERENCE_PROVIDER: 'openai-compatible' }), mock.fetchImpl)
+    const response = await transport.chat(request({ model: 'Gemma-4-E4B-it-GGUF', stream: false }))
+    await response.json()
+    expect(getInferenceResponseModel(response)).toBe('Gemma-4-E4B-it-GGUF')
+  })
+})
+
 describe('automatic local adapter probing', () => {
-  it('re-applies the local-only URL policy at the transport boundary', () => {
+  it('re-applies URL credential rejection at the transport boundary', () => {
     expect(() => new LocalInferenceTransport(
-      'https://api.openai.com/v1',
+      'https://user:secret@api.openai.com/v1',
       resolveInferenceAdapter({}),
       (async () => new Response()) as typeof fetch
-    )).toThrow('known-cloud-host')
+    )).toThrow('credentials-forbidden')
   })
 
   it('probes OpenAI-compatible discovery first, then pins native Ollama', async () => {
@@ -319,7 +329,7 @@ describe('automatic local adapter probing', () => {
       throw new Error(`Unexpected URL: ${url}`)
     })
     const transport = new LocalInferenceTransport(
-      'http://local-model:11434',
+      'http://ollama:11434',
       resolveInferenceAdapter({}),
       mock.fetchImpl
     )
@@ -330,9 +340,9 @@ describe('automatic local adapter probing', () => {
     const completion = await transport.chat(request({ model: 'local-model:3b' }))
     expect(completion.ok).toBe(true)
     expect(mock.calls.map((call) => call.url)).toEqual([
-      'http://local-model:11434/v1/models',
-      'http://local-model:11434/api/tags',
-      'http://local-model:11434/api/chat',
+      'http://ollama:11434/v1/models',
+      'http://ollama:11434/api/tags',
+      'http://ollama:11434/api/chat',
     ])
     expect(mock.calls.every((call) => call.init?.redirect === 'error')).toBe(true)
   })
@@ -346,7 +356,7 @@ describe('automatic local adapter probing', () => {
           done: true,
         }))
     const fallbackTransport = new LocalInferenceTransport(
-      'http://local-model:11434',
+      'http://ollama:11434',
       resolveInferenceAdapter({}),
       absent.fetchImpl
     )
@@ -356,7 +366,7 @@ describe('automatic local adapter probing', () => {
 
     const failed = fetchStub(() => new Response(null, { status: 503 }))
     const boundedTransport = new LocalInferenceTransport(
-      'http://local-model:11434',
+      'http://ollama:11434',
       resolveInferenceAdapter({}),
       failed.fetchImpl
     )
@@ -378,7 +388,7 @@ describe('automatic local adapter probing', () => {
     })
 
     const authenticated = new LocalInferenceTransport(
-      'http://100.124.181.9:4000',
+      'http://127.0.0.1:4000',
       resolveInferenceAdapter({ KEEPINDEX_INFERENCE_PROVIDER: 'openai-compatible' }),
       mock.fetchImpl,
       '  secret-blade-token  '

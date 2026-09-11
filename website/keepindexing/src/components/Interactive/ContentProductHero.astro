@@ -1,0 +1,120 @@
+---
+import Section from "@/components/Wrapper/Section.astro";
+import ContentWrapper from "@/components/Wrapper/ContentWrapper.astro";
+import Heading from "@/components/Typography/Heading.astro";
+import Eyebrow from "@/components/Typography/Eyebrow.astro";
+import Paragraph from "@/components/Typography/Paragraph.astro";
+import ButtonWrapper from "@/components/Wrapper/ButtonWrapper.astro";
+import Button from "@/components/Button.astro";
+import ContentArchitectureGraphic from "./ContentArchitectureGraphic.astro";
+interface Props {
+  /** Set to `false` to skip rendering this component and its children. */
+  render?: boolean;
+}
+const { render = true } = Astro.props;
+---
+
+{
+  render && (
+    <div class="producthero_wrap">
+      <Section paddingTop="large" paddingBottom="large">
+        <div class="producthero_layout">
+          <ContentWrapper variant="stack">
+            <Eyebrow>Private search. One computer.</Eyebrow>
+            <Heading tag="h1" variant="display" class="producthero_heading">
+              Search your world.
+              <>
+                <br />
+                <em>Keep it yours.</em>
+              </>
+            </Heading>
+            <Paragraph variant="large" maxWidth={43}>
+              Your notes, files, and browser history. The useful parts of the
+              web. One place to search them, with local AI by default and the
+              freedom to choose another endpoint.
+            </Paragraph>
+            <ButtonWrapper>
+              <>
+                <Button element="link" href="/docs" emphasis="primary">
+                  Install on your computer <span aria-hidden="true">↗</span>
+                </Button>
+                <Button element="link" href="#demo" emphasis="secondary">
+                  Explore an example ↓
+                </Button>
+              </>
+            </ButtonWrapper>
+            <p class="producthero_note">
+              Open source · No account · Your hardware
+            </p>
+          </ContentWrapper>
+          <ContentArchitectureGraphic />
+        </div>
+        <div class="producthero_baseline">
+          <>
+            <span>
+              A personal search engine, installed where your data lives.
+            </span>
+            <a href="/architecture">See what runs locally ↗</a>
+          </>
+        </div>
+      </Section>
+    </div>
+  )
+}
+<style is:global>
+  @layer components {
+    .producthero_wrap {
+      background: radial-gradient(
+        ellipse at 90% 25%,
+        #25422c44,
+        transparent 55%
+      );
+      .producthero_layout {
+        display: grid;
+        grid-template-columns: 1.15fr 1fr;
+        gap: 4rem;
+        align-items: center;
+      }
+      .producthero_heading {
+        font-size: clamp(3rem, 5.3vw, 5.6rem);
+        line-height: 1.03;
+        letter-spacing: -0.055em;
+      }
+      .producthero_heading em {
+        font-style: normal;
+        color: #62d66b;
+      }
+      .producthero_note {
+        font-size: 0.8rem;
+        color: #a7a59b;
+      }
+      .producthero_baseline {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        border-top: 0.0625rem solid #ffffff22;
+        padding-top: 1.5rem;
+        margin-top: 3rem;
+        font-size: 0.8rem;
+        color: #a7a59b;
+      }
+      .producthero_baseline a {
+        color: #f2efe6;
+        text-decoration: underline;
+        text-underline-offset: 0.25em;
+      }
+      @media (width < 64rem) {
+        .producthero_layout {
+          grid-template-columns: 1fr;
+          gap: 3rem;
+        }
+        .machine_wrap {
+          max-width: 42rem;
+        }
+        .producthero_baseline {
+          flex-direction: column;
+        }
+      }
+    }
+  }
+</style>

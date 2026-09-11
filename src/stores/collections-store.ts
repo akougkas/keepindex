@@ -206,7 +206,7 @@ export const useCollectionsStore = create<CollectionsState>()(
             }))
           }
         } catch {
-          // Keep the local cache when the homelab node is unavailable.
+          // Keep the local cache when the local application is unavailable.
         }
       },
     }),

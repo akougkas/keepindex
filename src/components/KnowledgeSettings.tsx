@@ -125,6 +125,7 @@ function ResourceCard({
 export function KnowledgeSettings({ isOpen, onClose }: KnowledgeSettingsProps) {
   const pathRef = useRef<HTMLInputElement>(null)
   const [pathInput, setPathInput] = useState('')
+  const [selectedHistoryPaths, setSelectedHistoryPaths] = useState<string[]>([])
   const [labelInput, setLabelInput] = useState('')
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null)
   const [confirmClear, setConfirmClear] = useState(false)
@@ -205,7 +206,8 @@ export function KnowledgeSettings({ isOpen, onClose }: KnowledgeSettingsProps) {
   }
 
   const handleHistoryImport = async () => {
-    const imported = await importBrowserHistory()
+    if (selectedHistoryPaths.length === 0) return
+    const imported = await importBrowserHistory(selectedHistoryPaths)
     if (imported != null) setLastHistoryImport(imported)
   }
 
@@ -255,10 +257,10 @@ export function KnowledgeSettings({ isOpen, onClose }: KnowledgeSettingsProps) {
               <section className="rounded-xl border border-border/60 bg-background/50 p-3.5">
                 <div className="mb-3 flex items-center gap-2">
                   <Plus className="size-3.5 text-primary" />
-                  <p className="section-kicker">Add disk or mount</p>
+                  <p className="section-kicker">Add a folder on this computer</p>
                 </div>
                 <div className="space-y-2">
-                  <Input ref={pathRef} value={pathInput} onChange={(event) => setPathInput(event.target.value)} placeholder="/home/user/notes or /mnt/nas/share" className="font-mono text-xs" aria-label="Knowledge directory path" />
+                  <Input ref={pathRef} value={pathInput} onChange={(event) => setPathInput(event.target.value)} placeholder="/home/keepindex/knowledge" className="font-mono text-xs" aria-label="Knowledge directory path" />
                   <Input value={labelInput} onChange={(event) => setLabelInput(event.target.value)} placeholder="Optional label, e.g. NAS documents" className="text-xs" aria-label="Knowledge source label" />
                   <Button onClick={handleIndex} disabled={isIndexing || !pathInput.trim()} className="w-full gap-2">
                     {isIndexing && !activeResourceId ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
@@ -266,7 +268,7 @@ export function KnowledgeSettings({ isOpen, onClose }: KnowledgeSettingsProps) {
                   </Button>
                 </div>
                 <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
-                  WSL paths and Windows drive paths are accepted. Mount SMB/NFS shares in WSL first, then add their <span className="font-mono">/mnt/…</span> path. Secrets, keys, and hidden folders are excluded. Text is capped at 4 MB; extractable documents at 32 MB.
+                  Docker can read only folders you explicitly mount. Add a read-only folder mount in compose.override.yml, restart, then enter its container path here. Native installs accept local and WSL paths. Secret-like files and hidden folders are excluded; review your selected folders too.
                 </p>
               </section>
 
@@ -303,7 +305,7 @@ export function KnowledgeSettings({ isOpen, onClose }: KnowledgeSettingsProps) {
                       <LockKeyhole className="size-3.5 text-amber-600" />
                     </div>
                     <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
-                      Import page titles, URLs, visit counts, and timestamps from discovered Chrome, Edge, Brave, Chromium, and Firefox profiles. Databases are copied before reading and never modified. The index stays in KeepIndex's local SQLite database.
+                      Choose profiles on this computer to import page titles, URLs, visit counts, and timestamps. In Docker, mount each selected profile read-only first. Databases are copied before reading and never modified. The index stays in KeepIndex's local SQLite database.
                     </p>
                   </div>
                 </div>
@@ -311,18 +313,19 @@ export function KnowledgeSettings({ isOpen, onClose }: KnowledgeSettingsProps) {
                   <div className="border-y border-border/45 bg-background/35 px-3.5 py-2">
                     <p className="mb-1.5 font-mono text-[8px] uppercase tracking-[0.12em] text-muted-foreground">Discovered on this machine</p>
                     <div className="flex flex-wrap gap-1.5">
-                      {browserHistoryStatus.discovered.slice(0, 8).map((source) => (
-                        <span key={source.id} title={source.path} className="rounded-md border border-border/60 bg-card/60 px-1.5 py-1 font-mono text-[9px] text-muted-foreground">
+                      {browserHistoryStatus.discovered.map((source) => (
+                        <label key={source.id} title={source.path} className="rounded-md border border-border/60 bg-card/60 px-1.5 py-1 font-mono text-[9px] text-muted-foreground">
+                          <input type="checkbox" className="mr-1.5" checked={selectedHistoryPaths.includes(source.path)} onChange={(event) => setSelectedHistoryPaths((current) => event.target.checked ? [...current, source.path] : current.filter((path) => path !== source.path))} />
                           {source.browser} · {source.profile} · {source.platform}
-                        </span>
+                        </label>
                       ))}
                     </div>
                   </div>
                 )}
                 <div className="flex flex-wrap items-center gap-2 p-3">
-                  <Button size="sm" onClick={() => void handleHistoryImport()} disabled={isImportingHistory || browserHistoryStatus?.discovered.length === 0} className="h-7 gap-1.5 text-[11px]">
+                  <Button size="sm" onClick={() => void handleHistoryImport()} disabled={isImportingHistory || selectedHistoryPaths.length === 0} className="h-7 gap-1.5 text-[11px]">
                     {isImportingHistory ? <Loader2 className="size-3 animate-spin" /> : <FileStack className="size-3" />}
-                    {browserHistoryStatus?.indexed ? 'Refresh history' : 'Import discovered history'}
+                    {browserHistoryStatus?.indexed ? 'Refresh selected profiles' : 'Import selected profiles'}
                   </Button>
                   {!!browserHistoryStatus?.entryCount && (
                     <Button variant={confirmHistoryClear ? 'destructive' : 'ghost'} size="sm" onClick={() => void handleHistoryClear()} disabled={isImportingHistory} className="h-7 gap-1.5 text-[11px]">
@@ -347,7 +350,7 @@ export function KnowledgeSettings({ isOpen, onClose }: KnowledgeSettingsProps) {
                   <div className="rounded-xl border border-dashed border-border p-6 text-center">
                     <HardDrive className="mx-auto size-7 text-muted-foreground/50" />
                     <p className="mt-2 text-sm font-medium">No indexed resources</p>
-                    <p className="mt-1 text-xs text-muted-foreground">Add local notes, project disks, or a mounted network share.</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Choose notes, a vault, or project folders on this computer.</p>
                   </div>
                 ) : (
                   <div className="space-y-2.5">

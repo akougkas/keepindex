@@ -9,15 +9,15 @@ services:
     restart: unless-stopped
     init: true
     ports:
-      - "${KEEPINDEX_BIND_ADDRESS:-127.0.0.1}:${KEEPINDEX_PORT:-5173}:5173"
+      - "127.0.0.1:${KEEPINDEX_PORT:-5173}:5173"
     environment:
       NODE_ENV: production
+      KEEPINDEX_CONTAINER: "1"
+      KEEPINDEX_AI_NAME: "${KEEPINDEX_AI_NAME:-Configured AI endpoint}"
       PORT: "5173"
       KEEPINDEX_DB_PATH: /data/keepindex.sqlite
       SEARXNG_URL: http://searxng:8080
-      # The production default remains 127.0.0.1:8080 outside Docker. A
-      # container reaches the same private host service through Docker's local
-      # host gateway; a private LLM_URL can override it explicitly.
+      # The model executes on this computer, on its host or in a local container.
       LLM_URL: "${LLM_URL:-http://host.docker.internal:8080}"
       LLM_API_KEY: "${LLM_API_KEY:-}"
       LLM_MODEL: "${LLM_MODEL:-}"
@@ -54,7 +54,7 @@ services:
     image: searxng/searxng:2026.8.28-a30b2d474@sha256:addd2cf36efb4b9815a2820a522aef7cce4da0d1c0e4527f6675f5663332fc9b
     restart: unless-stopped
     ports:
-      - "${KEEPINDEX_SEARXNG_BIND_ADDRESS:-127.0.0.1}:${KEEPINDEX_SEARXNG_PORT:-8888}:8080"
+      - "127.0.0.1:${KEEPINDEX_SEARXNG_PORT:-8888}:8080"
     volumes:
       - ./searxng:/etc/searxng:ro
       - ./searxng/google.py:/usr/local/searxng/searx/engines/google.py:ro

@@ -21,7 +21,9 @@ export default defineConfig({
           {
             weight: "200 800",
             style: "normal",
-            src: ["./src/assets/fonts/bricolage-grotesque-latin-wght-normal.woff2"],
+            src: [
+              "./src/assets/fonts/bricolage-grotesque-latin-wght-normal.woff2",
+            ],
           },
         ],
       },
@@ -55,5 +57,5 @@ export default defineConfig({
       },
     },
   ],
-  vite: { build: { cssTarget: "safari15.4" } },
+  vite: { build: { cssTarget: "safari15.4", assetsInlineLimit: 0 } },
 });

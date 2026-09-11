@@ -1,3 +1,4 @@
+import { AiConnectionSettings } from './AiConnectionSettings'
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -120,7 +121,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
 
   const handleClearAll = () => {
     if (confirmClear) {
-      setBackupStatus('Clearing browser and shared server state…')
+      setBackupStatus('Clearing KeepIndex data on this computer…')
       void resetAll().catch((error) => {
         setBackupStatus(error instanceof Error ? error.message : 'Factory reset failed before local data was cleared.')
         setConfirmClear(false)
@@ -207,7 +208,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                   <Button variant="ghost" size="icon-xs" onClick={() => void checkHealth()} aria-label="Refresh health check" title="Refresh health check"><RefreshCw className={cn('size-3.5', isCheckingHealth && 'animate-spin')} /></Button>
                 </CardHeader>
                 <CardContent className="space-y-2 text-xs">
-                  <HealthRow label="Local inference" healthy={health?.llm} pending={healthPending} detail={healthPending ? 'checking' : health?.llm ? `${health.modelCount ?? availableModels.length} models · ${health.latencyMs?.llm ?? '—'}ms` : 'offline'} />
+                  <HealthRow label="Selected AI endpoint" healthy={health?.llm} pending={healthPending} detail={healthPending ? 'checking' : health?.llm ? `${health.modelCount ?? availableModels.length} models · ${health.latencyMs?.llm ?? '—'}ms` : 'offline'} />
                   <HealthRow label="SearXNG" healthy={health?.searxng} pending={healthPending} detail={healthPending ? 'checking' : health?.searxng ? `${health.latencyMs?.searxng ?? '—'}ms` : 'offline'} />
                   {health?.searxngEngines && health.searxngEngines.total > 0 && (
                     <HealthRow
@@ -233,13 +234,14 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                 </CardContent>
               </Card>
 
+              <AiConnectionSettings onChange={() => void checkHealth()} />
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground"><Cpu className="size-3.5 text-primary" /> Active local model</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground"><Cpu className="size-3.5 text-primary" /> Active AI model</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
-                  <select value={selectedModel} onChange={(event) => void setSelectedModel(event.target.value)} className="w-full rounded-lg border border-border bg-muted/50 p-2 font-mono text-xs outline-none focus:ring-1 focus:ring-primary" aria-label="Active local model">
+                  <select value={selectedModel} onChange={(event) => void setSelectedModel(event.target.value)} className="w-full rounded-lg border border-border bg-muted/50 p-2 font-mono text-xs outline-none focus:ring-1 focus:ring-primary" aria-label="Active AI model">
                     {availableModels.map((model) => <option key={model.id} value={model.id}>{model.id}{model.isReasoning ? ' · reasoning' : ''}</option>)}
                   </select>
-                  <p className="text-[11px] text-muted-foreground">All models advertised by your local server are available. KeepIndex adapts generation limits and grounding instructions for compact models.</p>
+                  <p className="text-[11px] text-muted-foreground">Choose a model from the selected AI endpoint. KeepIndex adapts generation limits and grounding instructions for compact models.</p>
                   {modelsError && <p className="text-[10px] text-[oklch(0.68_0.13_75)]">{modelsError}</p>}
                 </CardContent>
               </Card>
@@ -284,7 +286,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                   </div>
                   {pendingRestore && (
                     <div className="rounded-lg border border-[oklch(0.68_0.13_75/0.35)] bg-[oklch(0.68_0.13_75/0.06)] p-2.5 text-[11px]">
-                      <p>Restore backup from {new Date(pendingRestore.exportedAt).toLocaleString()}? Current shared and browser state will be replaced.</p>
+                      <p>Restore backup from {new Date(pendingRestore.exportedAt).toLocaleString()}? Current KeepIndex and browser state on this computer will be replaced.</p>
                       <div className="mt-2 flex gap-2"><Button size="sm" onClick={() => void confirmRestore()} disabled={isRestoring} className="h-7 text-[11px]">{isRestoring ? 'Restoring…' : 'Confirm restore'}</Button><Button variant="ghost" size="sm" onClick={() => setPendingRestore(null)} disabled={isRestoring} className="h-7 text-[11px]">Cancel</Button></div>
                     </div>
                   )}

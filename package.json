@@ -2,7 +2,7 @@
   "name": "keepindex",
   "private": true,
   "version": "1.1.0",
-  "description": "Private, local-first federated search.",
+  "description": "Private search on your computer. Your choice of AI.",
   "license": "Apache-2.0",
   "homepage": "https://keepindex.ing",
   "repository": {
@@ -14,7 +14,7 @@
   },
   "keywords": [
     "local-first",
-    "federated-search",
+    "local-search",
     "private-search",
     "pwa"
   ],

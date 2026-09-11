@@ -1,439 +1,96 @@
 ---
 import Layout from "@/layouts/BaseLayout.astro";
-import Section from "@/components/Wrapper/Section.astro";
-import ContentWrapper from "@/components/Wrapper/ContentWrapper.astro";
-import Heading from "@/components/Typography/Heading.astro";
-import Eyebrow from "@/components/Typography/Eyebrow.astro";
-import Paragraph from "@/components/Typography/Paragraph.astro";
-import ButtonWrapper from "@/components/Wrapper/ButtonWrapper.astro";
-import Button from "@/components/Button.astro";
-import ContentTerminalCli from "@/components/Interactive/ContentTerminalCli.astro";
+import ContentGuide from "@/components/Item/ContentGuide.astro";
+const content = {
+  eyebrow: "Installation & daily use",
+  title: "Your first folder. Your first search.",
+  intro:
+    "Install on the computer holding your sources. Docker runs the application and SearXNG. Choose a local AI runtime or explicitly connect a remote gateway.",
+  sections: [
+    {
+      id: "docker",
+      title: "Install the local stack",
+      paragraphs: [
+        "Install Docker Desktop or Docker Engine with the Compose plugin. Clone KeepIndex and copy the environment template. Set an initial LLM_URL, or configure your endpoint later in Settings. Search can run while AI is unavailable.",
+      ],
+      code: "git clone https://github.com/akougkas/keepindex.git\ncd keepindex\ncp .env.example .env\n# Edit .env for your local model runtime\n./start.sh",
+      link: {
+        href: "/inference",
+        label: "Choose the model connection",
+      },
+    },
+    {
+      id: "open",
+      title: "Open the app on this computer",
+      paragraphs: [
+        "Visit http://localhost:5173 in your browser. KeepIndex is available on this computer only. The product website you are reading does not contain your workspace.",
+        "The foreground launcher stops with Ctrl+C. Use docker compose up -d --build to run in the background. In supported browsers, install the local app as a PWA.",
+      ],
+      code: "docker compose up -d --build\ndocker compose ps\ncurl -fsS http://localhost:5173/api/health",
+    },
+    {
+      id: "ai",
+      title: "Choose an AI connection",
+      paragraphs: [
+        "Open Settings → AI connections. Check endpoints to see which public model APIs are reachable. Lemonade, LM Studio, Ollama, and llama.cpp have local profiles; use Add endpoint for Blade or another compatible gateway. Then select a model from that endpoint’s catalog.",
+        "A remote endpoint receives prompts and retrieved excerpts when selected. Its scope is visible beside the query box. Saving a new endpoint does not activate it, and KeepIndex never silently falls back to another connection.",
+      ],
+      link: {
+        href: "/inference",
+        label: "AI connection guide",
+      },
+    },
+    {
+      id: "folders",
+      title: "Grant one folder",
+      paragraphs: [
+        "Create compose.override.yml with a selected host folder mounted read-only. Replace the source path below with a real path on this computer. Windows with WSL can use /mnt/c/Users/you/Documents/notes; macOS can use /Users/you/Documents/notes.",
+        "Run docker compose up -d after editing. In Knowledge resources, add /home/keepindex/knowledge: the path inside the container. Repeat with additional explicit mounts for other folders. Original files stay in place.",
+      ],
+      code: "services:\n  keepindex:\n    volumes:\n      - type: bind\n        source: /absolute/path/to/your/notes\n        target: /home/keepindex/knowledge\n        read_only: true",
+    },
+    {
+      id: "history",
+      title: "Choose browser profiles",
+      paragraphs: [
+        "Browser history is opt-in. A webpage cannot read it simply because you open the app. In Docker, mount a selected profile directory read-only and point KEEPINDEX_BROWSER_HISTORY_PATHS at its History file (Chromium browsers) or places.sqlite (Firefox).",
+        "The profile directory mount also exposes database sidecar files when present. The importer reads history metadata, not passwords or cookies; grant only a profile you intend to use. Select its checkbox in Knowledge resources and press Import selected profiles. Close the browser and retry if a live database is locked.",
+      ],
+      code: "services:\n  keepindex:\n    environment:\n      KEEPINDEX_BROWSER_HISTORY_PATHS: /home/keepindex/browser/chrome/History\n    volumes:\n      - type: bind\n        source: /absolute/path/to/Chrome/User Data/Default\n        target: /home/keepindex/browser/chrome\n        read_only: true",
+    },
+    {
+      id: "search",
+      title: "Search with the right scope",
+      paragraphs: [
+        "Choose Files, Vaults, Docs, or History to retrieve that local source category without web discovery. Choose All or Web when you want search terms sent to public engines. Avoid private details in web-enabled queries.",
+        "Try a filename, an exact phrase, or operators such as ext:pdf, path:projects, and tag:research. Ask for an answer when the selected AI endpoint is ready, and inspect its citations.",
+      ],
+    },
+    {
+      id: "cli",
+      title: "Check, stop, and maintain",
+      paragraphs: [
+        "Docker Compose reports container state and logs. Stopping containers retains the local index. Removing volumes deletes the index and app state; it does not delete original source files. Export and restore controls are in Settings.",
+        "For a native CLI, install Bun, run bun install --frozen-lockfile, then bun run keepidx doctor or bun run keepidx status. Doctor checks the environment where it runs, so a host CLI may not resolve container-only services or database mounts.",
+      ],
+      code: "docker compose logs --tail=80 keepindex\ndocker compose stop\n# Restart later\ndocker compose up -d",
+    },
+    {
+      id: "api",
+      title: "Use the local API",
+      paragraphs: [
+        "The API is served from the app’s local origin and has no multi-user authentication. It refuses foreign browser origins. Do not publish it through a proxy or tunnel.",
+      ],
+      code: 'curl -N http://localhost:5173/api/ask \\\n  -H \'Content-Type: application/json\' \\\n  -d \'{"query":"What do my notes say about indexing?","target":"vault"}\'',
+      link: {
+        href: "https://github.com/akougkas/keepindex#readme",
+        label: "Read the full repository guide",
+      },
+    },
+  ],
+};
 ---
 
-<Layout
-  title="Documentation & Developer Reference"
-  description="Comprehensive documentation for KeepIndex: Docker Compose quickstart, keepidx CLI reference, canonical environment variables, and REST/SSE API examples."
-  theme="dark"
+<Layout title={content.title} description={content.intro}
+  ><ContentGuide {...content} /></Layout
 >
-  {/* 1. Docs Hero */}
-  <Section paddingTop="large" paddingBottom="medium">
-    <ContentWrapper variant="stack" centered={true}>
-      <Eyebrow variant="tag">Developer Reference</Eyebrow>
-      <Heading tag="h1" variant="display" maxWidth={26}>
-        Documentation &amp; Quickstart
-      </Heading>
-      <Paragraph maxWidth={52} variant="large">
-        Everything you need to deploy, configure, administer, and integrate KeepIndex into your homelab or developer workflow.
-      </Paragraph>
-      <ButtonWrapper>
-        <Button element="link" href="#quickstart" emphasis="primary">Quickstart</Button>
-        <Button element="link" href="#cli" emphasis="secondary"><code>keepidx</code> CLI</Button>
-        <Button element="link" href="#env" emphasis="secondary">Configuration</Button>
-        <Button element="link" href="#api" emphasis="secondary">REST / SSE API</Button>
-      </ButtonWrapper>
-    </ContentWrapper>
-  </Section>
-
-  {/* 2. Quickstart Section */}
-  <Section paddingTop="medium" paddingBottom="large" id="quickstart">
-    <ContentWrapper variant="stack">
-      <Eyebrow>Getting Started</Eyebrow>
-      <Heading tag="h2" variant="h1" maxWidth={28}>
-        Start with Docker Compose
-      </Heading>
-      <Paragraph maxWidth={50}>
-        Docker Engine with the Compose plugin is the only prerequisite for running KeepIndex and SearXNG.
-      </Paragraph>
-
-      <div class="code_card">
-        <div class="code_bar">
-          <span class="code_file">Terminal Quickstart</span>
-          <button class="code_copy" type="button" data-copy="git clone https://github.com/akougkas/keepindex.git&#10;cd keepindex&#10;./start.sh">
-            Copy
-          </button>
-        </div>
-        <pre class="code_block"><code><span class="code_comment"># Clone the repository</span>
-git clone https://github.com/akougkas/keepindex.git
-cd keepindex
-
-<span class="code_comment"># Run the unified launcher</span>
-./start.sh</code></pre>
-        <div class="code_footer">
-          That single command builds the application container with Bun, starts SearXNG, provisions a named SQLite data volume, and exposes the local PWA at <code>http://127.0.0.1:5173</code>.
-        </div>
-      </div>
-    </ContentWrapper>
-  </Section>
-
-  {/* 3. CLI Section */}
-  <Section paddingTop="medium" paddingBottom="large" id="cli">
-    <ContentWrapper variant="stack">
-      <Eyebrow>Command Line Tool</Eyebrow>
-      <Heading tag="h2" variant="h1" maxWidth={28}>
-        The <code>keepidx</code> Administration CLI
-      </Heading>
-      <Paragraph maxWidth={52}>
-        <code>keepidx</code> is a native Bun/TypeScript tool for health probes, prerequisites checking, and container management.
-      </Paragraph>
-
-      <ContentTerminalCli />
-
-      <div class="docs_cli_table_wrap">
-        <table class="docs_table">
-          <thead>
-            <tr>
-              <th scope="col">Command</th>
-              <th scope="col">Description</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><code>keepidx help</code></td>
-              <td>Print command summary and flags. Every command accepts <code>--help</code>.</td>
-            </tr>
-            <tr>
-              <td><code>keepidx start</code></td>
-              <td>Build and launch KeepIndex and SearXNG with Docker Compose.</td>
-            </tr>
-            <tr>
-              <td><code>keepidx doctor</code></td>
-              <td>Check Docker prerequisites, loopback ports, SQLite WAL storage, and local model reachability.</td>
-            </tr>
-            <tr>
-              <td><code>keepidx status</code></td>
-              <td>Concise human-readable health summary with latency, database, and inference metrics.</td>
-            </tr>
-            <tr>
-              <td><code>keepidx status --json</code></td>
-              <td>Stable machine-readable JSON output for health monitoring scripts or homelab dashboards.</td>
-            </tr>
-            <tr>
-              <td><code>keepidx open</code></td>
-              <td>Open the configured local UI in your default browser, or print its resolved URL.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </ContentWrapper>
-  </Section>
-
-  {/* 4. Configuration / Environment Variables */}
-  <Section paddingTop="medium" paddingBottom="large" id="env">
-    <ContentWrapper variant="stack">
-      <Eyebrow>Configuration</Eyebrow>
-      <Heading tag="h2" variant="h1" maxWidth={28}>
-        Environment Variables Master Table
-      </Heading>
-      <Paragraph maxWidth={52}>
-        KeepIndex reads only the canonical variables in this table. Public cloud API variables are strictly absent.
-      </Paragraph>
-
-      <div class="docs_table_wrap">
-        <table class="docs_table">
-          <thead>
-            <tr>
-              <th scope="col">Variable</th>
-              <th scope="col">Default</th>
-              <th scope="col">Purpose</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><code>KEEPINDEX_DB_PATH</code></td>
-              <td><code>server/keepindex.sqlite</code></td>
-              <td>Path to the SQLite database (in Docker: <code>/data/keepindex.sqlite</code>).</td>
-            </tr>
-            <tr>
-              <td><code>KEEPINDEX_BIND_ADDRESS</code></td>
-              <td><code>127.0.0.1</code></td>
-              <td>Host network interface bind address for the KeepIndex UI and API.</td>
-            </tr>
-            <tr>
-              <td><code>KEEPINDEX_PORT</code></td>
-              <td><code>5173</code></td>
-              <td>Host port for the KeepIndex application.</td>
-            </tr>
-            <tr>
-              <td><code>KEEPINDEX_SEARXNG_BIND_ADDRESS</code></td>
-              <td><code>127.0.0.1</code></td>
-              <td>Loopback bind address for SearXNG; stays 127.0.0.1 even if UI is LAN-shared.</td>
-            </tr>
-            <tr>
-              <td><code>KEEPINDEX_SEARXNG_PORT</code></td>
-              <td><code>8888</code></td>
-              <td>Docker host port for SearXNG retrieval.</td>
-            </tr>
-            <tr>
-              <td><code>SEARXNG_URL</code></td>
-              <td><code>http://127.0.0.1:8888</code></td>
-              <td>Self-hosted SearXNG meta-search endpoint.</td>
-            </tr>
-            <tr>
-              <td><code>KEEPINDEX_INFERENCE_PROVIDER</code></td>
-              <td><code>auto</code></td>
-              <td>Selects transport: <code>auto</code>, <code>openai-compatible</code>, or <code>ollama</code>.</td>
-            </tr>
-            <tr>
-              <td><code>LLM_URL</code></td>
-              <td><code>http://127.0.0.1:8080</code></td>
-              <td>Local inference server root. Public internet endpoints are rejected.</td>
-            </tr>
-            <tr>
-              <td><code>LLM_MODEL</code></td>
-              <td>First advertised model</td>
-              <td>Optional preferred local model identifier advertised by the server.</td>
-            </tr>
-            <tr>
-              <td><code>LLM_FALLBACK_MODEL</code></td>
-              <td>Empty</td>
-              <td>Optional fallback among advertised local models.</td>
-            </tr>
-            <tr>
-              <td><code>KEEPINDEX_ALLOWED_ORIGINS</code></td>
-              <td>Empty</td>
-              <td>Comma-separated browser origins allowed to call <code>/api/*</code>.</td>
-            </tr>
-            <tr>
-              <td><code>KEEPINDEX_BROWSER_HISTORY_PATHS</code></td>
-              <td>Empty</td>
-              <td>Additional host browser-history SQLite paths offered for opt-in import.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </ContentWrapper>
-  </Section>
-
-  {/* 5. REST & SSE API Reference */}
-  <Section paddingTop="medium" paddingBottom="large" id="api">
-    <ContentWrapper variant="stack">
-      <Eyebrow>API Reference</Eyebrow>
-      <Heading tag="h2" variant="h1" maxWidth={30}>
-        REST &amp; Streaming SSE Endpoints
-      </Heading>
-      <Paragraph maxWidth={52}>
-        KeepIndex binds to <code>0.0.0.0:5173</code> inside its container so trusted private clients can integrate search and answer streams.
-      </Paragraph>
-
-      <div class="api_card">
-        <div class="api_header">
-          <span class="api_badge post">POST</span>
-          <code>/api/ask</code>
-          <span class="api_desc">Grounded Answer Stream (Server-Sent Events)</span>
-        </div>
-        <pre class="api_code"><code>curl -N http://127.0.0.1:5173/api/ask \
-  -H 'Content-Type: application/json' \
-  -d '&#123;
-    "query": "How should I structure my reverse proxy?",
-    "target": "all",
-    "semantic": true
-  &#125;'</code></pre>
-      </div>
-
-      <div class="api_card">
-        <div class="api_header">
-          <span class="api_badge post">POST</span>
-          <code>/api/search</code>
-          <span class="api_desc">Federated Search Candidates</span>
-        </div>
-        <pre class="api_code"><code>curl -s http://127.0.0.1:5173/api/search \
-  -H 'Content-Type: application/json' \
-  -d '&#123;
-    "query": "site:github.com sqlite bm25",
-    "focus": "all",
-    "target": "all",
-    "count": 10
-  &#125;'</code></pre>
-      </div>
-
-      <div class="api_card">
-        <div class="api_header">
-          <span class="api_badge get">GET</span>
-          <code>/api/health</code>
-          <span class="api_desc">System Diagnostics &amp; Health Probe</span>
-        </div>
-        <pre class="api_code"><code>curl -s http://127.0.0.1:5173/api/health</code></pre>
-      </div>
-    </ContentWrapper>
-  </Section>
-</Layout>
-
-<script>
-  // Copy Buttons
-  document.querySelectorAll<HTMLButtonElement>(".code_copy").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const text = btn.dataset.copy;
-      if (text) {
-        await navigator.clipboard.writeText(text);
-        btn.textContent = "Copied!";
-        setTimeout(() => {
-          btn.textContent = "Copy";
-        }, 1500);
-      }
-    });
-  });
-</script>
-
-<style is:global>
-  @layer components {
-    .code_card {
-      background-color: var(--dark-900);
-      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 14%, transparent);
-      border-radius: var(--radius-small);
-      overflow: hidden;
-      margin-top: var(--space-4);
-    }
-
-    .code_bar {
-      background-color: var(--dark-800);
-      padding: var(--space-2) var(--space-4);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border-bottom: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 10%, transparent);
-    }
-
-    .code_file {
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      color: var(--brand-stone);
-    }
-
-    .code_copy {
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      background-color: var(--brand-green);
-      color: var(--brand-ink);
-      border: 0;
-      padding: 0.25rem 0.625rem;
-      border-radius: var(--radius-small);
-      font-weight: 700;
-      cursor: pointer;
-      &:hover {
-        background-color: var(--brand-ivory);
-      }
-    }
-
-    .code_block {
-      padding: var(--space-4);
-      font-family: var(--font-mono);
-      font-size: 0.875rem;
-      line-height: 1.6;
-      color: var(--brand-ivory);
-      margin: 0;
-      overflow-x: auto;
-    }
-
-    .code_comment {
-      color: var(--brand-stone);
-    }
-
-    .code_footer {
-      background-color: var(--dark-800);
-      padding: var(--space-3) var(--space-4);
-      font-size: var(--text-small);
-      color: var(--brand-stone);
-      border-top: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 8%, transparent);
-      code {
-        font-family: var(--font-mono);
-        color: var(--brand-green);
-      }
-    }
-
-    .docs_table_wrap,
-    .docs_cli_table_wrap {
-      width: 100%;
-      overflow-x: auto;
-      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 14%, transparent);
-      border-radius: var(--radius-main);
-      background-color: var(--dark-900);
-      margin-top: var(--space-4);
-    }
-
-    .docs_table {
-      width: 100%;
-      border-collapse: collapse;
-      text-align: left;
-      font-size: var(--text-small);
-    }
-
-    .docs_table th {
-      padding: var(--space-3) var(--space-4);
-      background-color: var(--dark-800);
-      font-family: var(--display-family);
-      font-weight: 700;
-      color: var(--brand-ivory);
-      border-bottom: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 12%, transparent);
-    }
-
-    .docs_table td {
-      padding: var(--space-3) var(--space-4);
-      border-bottom: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 8%, transparent);
-      color: var(--brand-stone);
-      code {
-        font-family: var(--font-mono);
-        color: var(--brand-green);
-        background-color: var(--dark-800);
-        padding: 0.15em 0.4em;
-        border-radius: 0.25em;
-      }
-    }
-
-    .api_card {
-      background-color: var(--dark-900);
-      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 14%, transparent);
-      border-radius: var(--radius-small);
-      overflow: hidden;
-      margin-top: var(--space-3);
-    }
-
-    .api_header {
-      background-color: var(--dark-800);
-      padding: var(--space-2) var(--space-4);
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: var(--space-3);
-      border-bottom: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 10%, transparent);
-
-      code {
-        font-family: var(--font-mono);
-        font-size: 0.95rem;
-        font-weight: 700;
-        color: var(--brand-ivory);
-      }
-    }
-
-    .api_badge {
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      font-weight: 800;
-      padding: 0.2rem 0.5rem;
-      border-radius: 0.25rem;
-      &.post {
-        background-color: rgba(98, 214, 107, 0.2);
-        color: var(--brand-green);
-      }
-      &.get {
-        background-color: rgba(59, 130, 246, 0.2);
-        color: #93c5fd;
-      }
-    }
-
-    .api_desc {
-      font-size: 0.8125rem;
-      color: var(--brand-stone);
-      margin-left: auto;
-    }
-
-    .api_code {
-      padding: var(--space-4);
-      font-family: var(--font-mono);
-      font-size: 0.875rem;
-      line-height: 1.6;
-      color: var(--brand-ivory);
-      margin: 0;
-      overflow-x: auto;
-    }
-  }
-</style>

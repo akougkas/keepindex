@@ -96,7 +96,7 @@ async function staticResponse(request: Request): Promise<Response> {
 }
 
 const server = Bun.serve({
-  hostname: '0.0.0.0',
+  hostname: process.env.KEEPINDEX_CONTAINER === '1' ? '0.0.0.0' : '127.0.0.1',
   port: PORT,
   // Hono returns the stable JSON 413 shape; this matching transport cap keeps a
   // production socket from buffering beyond the same public API budget first.

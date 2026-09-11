@@ -31,3 +31,6 @@ Zone.Identifier
 .env.local
 .env.*.local
 compose.override.yml
+
+# AI connection credentials stay on this installation.
+**/ai-connections.json*

@@ -1,232 +1,73 @@
 ---
 import Layout from "@/layouts/BaseLayout.astro";
-import Section from "@/components/Wrapper/Section.astro";
-import ContentWrapper from "@/components/Wrapper/ContentWrapper.astro";
-import Heading from "@/components/Typography/Heading.astro";
-import Eyebrow from "@/components/Typography/Eyebrow.astro";
-import Paragraph from "@/components/Typography/Paragraph.astro";
-import ButtonWrapper from "@/components/Wrapper/ButtonWrapper.astro";
-import Button from "@/components/Button.astro";
-import Grid from "@/components/Wrapper/Grid.astro";
-import Card from "@/components/Item/Card.astro";
-import Accordion from "@/components/Interactive/Accordion.astro";
-import AccordionItem from "@/components/Interactive/AccordionItem.astro";
-import ContentPrivacyMatrix from "@/components/Item/ContentPrivacyMatrix.astro";
+import ContentGuide from "@/components/Item/ContentGuide.astro";
+const content = {
+  eyebrow: "Privacy & trust",
+  title: "A boundary you can understand.",
+  intro:
+    "Your files and index stay on your computer. AI and web search have explicit destinations. Understand what each choice sends outside the installation.",
+  sections: [
+    {
+      id: "local",
+      title: "Your index stays with your installation",
+      paragraphs: [
+        "KeepIndex stores extracted file text, imported browser metadata, settings, search history, and evidence records in local SQLite and browser storage. Original files remain in the selected folders.",
+        "The public product website has no connection to these stores. There is no hosted indexing service or KeepIndex account. Remote AI is an explicit endpoint choice, separate from where your index lives.",
+      ],
+    },
+    {
+      id: "ai",
+      title: "Local AI by default. Remote AI by choice.",
+      paragraphs: [
+        "With a local runtime, prompts and evidence go to that runtime on this computer. If you select Blade or another remote endpoint, prompts, conversation context, and retrieved excerpts go there for AI processing. Source folders and the database remain here.",
+        "The app labels each connection as local or remote and shows the active connection beside the query box. No automatic fallback switches between connections. API keys stay in an owner-readable file on your installation, not in browser storage or the website. Endpoint redirects and credentials embedded in URLs are rejected.",
+        "You control the chosen runtime or gateway. Its own logging, retention, forwarding, and model-provider settings apply to the content you send it. Use a locally executing runtime when that content must remain on the computer.",
+      ],
+    },
+    {
+      id: "web",
+      title: "Web searches leave the computer",
+      paragraphs: [
+        "All and Web queries send search terms through your local SearXNG instance to public engines. Source hydration can fetch webpages. Engines and websites can see the requests they receive.",
+        "Files, Vaults, Docs, and History retrieve their local source category without web discovery. Do not include secrets in web-enabled queries. Opening an external result or following a cited website also makes a normal internet request.",
+      ],
+    },
+    {
+      id: "storage",
+      title: "Local does not mean encrypted",
+      paragraphs: [
+        "KeepIndex does not encrypt its SQLite index, browser storage, or exported backups. Use a protected OS account, disk encryption, and appropriate backup storage. Exports can contain private text.",
+        "The personal API has no user authentication. Loopback publication and origin checks protect the local application boundary; they do not isolate you from another OS user or malicious software already running on the computer.",
+      ],
+    },
+    {
+      id: "control",
+      title: "Grant, inspect, remove",
+      paragraphs: [
+        "Containers read only the folders you mount. Browser-history imports require selected profiles. Secret-like files and hidden folders are excluded by default, but these filters cannot identify every sensitive passage inside an ordinary document.",
+        "Remove resources to delete their index entries, clear imported history, or reset KeepIndex state in Settings. Original files and original browser databases are not deleted.",
+      ],
+    },
+    {
+      id: "answers",
+      title: "Citations are for inspection",
+      paragraphs: [
+        "KeepIndex checks citation identifiers and coverage and applies lexical checks during repair. Insufficient grounding can prevent an answer from being recorded as a grounded success.",
+        "These are engineering checks, not factual verification. An answer can be mistaken even when its citation resolves. Inspect the underlying source when the decision matters.",
+      ],
+    },
+    {
+      id: "website",
+      title: "This public website",
+      paragraphs: [
+        "keepindex.ing is a static product website hosted on Blade through Cloudflare. Cloudflare and the web host process normal visitor request metadata to deliver it. The site has no added analytics scripts or private-device connection.",
+        "The interactive example contains sample data and makes no search or inference requests. External links, including GitHub, have their own privacy practices. Phone access displays this website, not a private KeepIndex instance.",
+      ],
+    },
+  ],
+};
 ---
 
-<Layout
-  title="Privacy Sovereign Manifest & Threat Model"
-  description="KeepIndex's non-negotiable privacy commitments: zero cloud fallback, zero telemetry, credential sanitization, and strict containment."
-  theme="dark"
+<Layout title={content.title} description={content.intro}
+  ><ContentGuide {...content} /></Layout
 >
-  {/* 1. Privacy Hero */}
-  <Section paddingTop="large" paddingBottom="medium">
-    <ContentWrapper variant="stack" centered={true}>
-      <Eyebrow variant="tag">The Privacy Manifest</Eyebrow>
-      <Heading tag="h1" variant="display" maxWidth={26}>
-        Search your world. <span style="color: var(--brand-green);">Keep it yours.</span>
-      </Heading>
-      <Paragraph maxWidth={52} variant="large">
-        Privacy is not an added toggle or an enterprise subscription feature. In KeepIndex, privacy is the fundamental architectural constraint that governs every line of code.
-      </Paragraph>
-      <ButtonWrapper>
-        <Button element="link" href="/docs" emphasis="primary">Deploy Sovereign</Button>
-        <Button element="link" href="#threat-model" emphasis="secondary">Threat Model ↓</Button>
-      </ButtonWrapper>
-    </ContentWrapper>
-  </Section>
-
-  {/* 2. Core Pillars */}
-  <Section paddingTop="medium" paddingBottom="large">
-    <ContentWrapper variant="stack">
-      <Eyebrow>Inviolable Rules</Eyebrow>
-      <Heading tag="h2" variant="h1" maxWidth={30}>
-        Our Six Non-Negotiable Commitments
-      </Heading>
-
-      <Grid medium={2} large={3} class="privacy_grid">
-        <Card
-          eyebrow="COMMITMENT 01"
-          heading="Zero Cloud Fallback"
-          text="Inference URLs are restricted to loopback and private RFC1918 addresses. If your local model is offline, search reports that local inference is unavailable rather than silently dispatching your private thoughts to OpenAI, Anthropic, or Google."
-          theme="dark"
-        />
-
-        <Card
-          eyebrow="COMMITMENT 02"
-          heading="Zero Telemetry & Tracking"
-          text="No analytics collectors, error beacons, tracking pixels, or phone-home telemetry. What you search, what files you index, and what answers you synthesize remain exclusively inside your local SQLite database."
-          theme="dark"
-        />
-
-        <Card
-          eyebrow="COMMITMENT 03"
-          heading="Credential & Secret Stripping"
-          text="URL query tokens, passwords, and OAuth parameters are stripped from browser history before disk write. Sensitive dotfiles (.env), private keys (.pem), and auth credentials are excluded from indexing."
-          theme="dark"
-        />
-
-        <Card
-          eyebrow="COMMITMENT 04"
-          heading="Local File Containment"
-          text="KeepIndex only reads files inside explicitly configured roots. Files cannot be accessed outside those boundaries via path traversal (../) or external symlinks, and files are never uploaded or synced externally."
-          theme="dark"
-        />
-
-        <Card
-          eyebrow="COMMITMENT 05"
-          heading="Bounded Evidence Packs"
-          text="Prompts are limited to tightly bounded, inspectable token budgets. Retrieved text is treated as untrusted data to defend against prompt injection and prevent malicious web text from steering your model."
-          theme="dark"
-        />
-
-        <Card
-          eyebrow="COMMITMENT 06"
-          heading="Fail-Closed Grounding Gate"
-          text="Every synthesized sentence requires inspectable evidence citations from admitted local sources. Ungrounded assertions fail closed to status: no_evidence rather than presenting hallucinations as grounded fact."
-          theme="dark"
-        />
-      </Grid>
-    </ContentWrapper>
-  </Section>
-
-  {/* 3. Threat Model Table */}
-  <Section paddingTop="medium" paddingBottom="large" id="threat-model">
-    <ContentWrapper variant="stack">
-      <Eyebrow>Threat Analysis</Eyebrow>
-      <Heading tag="h2" variant="h1" maxWidth={30}>
-        Explicit Threat Model &amp; Mitigations
-      </Heading>
-      <Paragraph maxWidth={52}>
-        Local-first software requires rigorous boundary analysis. Here is how KeepIndex addresses specific attack vectors.
-      </Paragraph>
-
-      <div class="threat_table_wrap">
-        <table class="threat_table">
-          <thead>
-            <tr>
-              <th scope="col">Attack Vector / Risk</th>
-              <th scope="col">Potential Consequence</th>
-              <th scope="col">KeepIndex Mitigation &amp; Defense</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><strong>Prompt Injection via Web Evidence</strong></td>
-              <td>Malicious web page contains instructions trying to steer the local model.</td>
-              <td>Retrieved text is marked as untrusted evidence in prompts. Research sub-query planning is seeded strictly from user queries, never from unvetted web text.</td>
-            </tr>
-            <tr>
-              <td><strong>Accidental Secret Ingestion</strong></td>
-              <td>Indexing code repositories that contain <code>.env</code> files or SSH private keys.</td>
-              <td>Built-in exclusion rules reject credential extensions, private key headers, and secret dotfiles before text extraction begins.</td>
-            </tr>
-            <tr>
-              <td><strong>Browser History Token Leaks</strong></td>
-              <td>OAuth callback URLs or reset tokens stored in browser history.</td>
-              <td>URL sanitizer strips query parameters matching token patterns, password fields, and hash fragments before SQLite insertion. Bodies and cookies are never imported.</td>
-            </tr>
-            <tr>
-              <td><strong>Arbitrary Path Traversal</strong></td>
-              <td>Malicious query attempting to access <code>/etc/passwd</code> or host files.</td>
-              <td>Strict indexed-root containment check prevents reading any file whose resolved canonical path lies outside the configured knowledge root.</td>
-            </tr>
-            <tr>
-              <td><strong>Model Hallucination as Fact</strong></td>
-              <td>Local model confidently inventing false data or facts.</td>
-              <td>Post-generation citation gate enforces ≥80% sentence-level evidence coverage. Ungrounded assertions fail closed to <code>status: no_evidence</code>.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </ContentWrapper>
-  </Section>
-
-  {/* 4. Comparative Sovereignty Matrix */}
-  <Section paddingTop="medium" paddingBottom="large">
-    <ContentWrapper variant="stack">
-      <Eyebrow>Comparison</Eyebrow>
-      <Heading tag="h2" variant="h1" maxWidth={28}>
-        Sovereignty Comparison Table
-      </Heading>
-      <ContentPrivacyMatrix />
-    </ContentWrapper>
-  </Section>
-
-  {/* 5. Privacy FAQ */}
-  <Section paddingTop="medium" paddingBottom="large">
-    <ContentWrapper variant="stack">
-      <Eyebrow>Questions</Eyebrow>
-      <Heading tag="h2" variant="h1">Privacy FAQs</Heading>
-
-      <Accordion single={true} openFirst={true}>
-        <AccordionItem heading="Can KeepIndex see my searches if I use the public website keepindex.ing?">
-          <p>
-            No. The public domain <code>keepindex.ing</code> is a static documentation and project showcase site. It contains zero search API handlers, zero login portals, and zero telemetry scripts. All your actual searches occur inside your private local container on your own machine.
-          </p>
-        </AccordionItem>
-
-        <AccordionItem heading="What happens when I delete my history in KeepIndex?">
-          <p>
-            Deletion is permanent and local. Query records, evidence packs, and temporary chunk caches are purged immediately from your local SQLite WAL database.
-          </p>
-        </AccordionItem>
-
-        <AccordionItem heading="Why does KeepIndex avoid claiming to be 'unhackable' or '100% anonymous'?">
-          <p>
-            Honest engineering. Local-first describes architecture and control, not immunity from a compromised host machine or an open firewall. We clearly document the security boundary so you can deploy responsibly.
-          </p>
-        </AccordionItem>
-      </Accordion>
-    </ContentWrapper>
-  </Section>
-</Layout>
-
-<style is:global>
-  @layer components {
-    .privacy_grid {
-      margin-top: var(--space-4);
-    }
-
-    .threat_table_wrap {
-      width: 100%;
-      overflow-x: auto;
-      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 14%, transparent);
-      border-radius: var(--radius-main);
-      background-color: var(--dark-900);
-      margin-top: var(--space-4);
-    }
-
-    .threat_table {
-      width: 100%;
-      border-collapse: collapse;
-      text-align: left;
-      font-size: var(--text-small);
-    }
-
-    .threat_table th {
-      padding: var(--space-3) var(--space-4);
-      background-color: var(--dark-800);
-      font-family: var(--display-family);
-      font-weight: 700;
-      color: var(--brand-ivory);
-      border-bottom: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 12%, transparent);
-    }
-
-    .threat_table td {
-      padding: var(--space-3) var(--space-4);
-      border-bottom: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 8%, transparent);
-      color: var(--brand-stone);
-      vertical-align: top;
-      line-height: var(--line-height-medium);
-
-      strong {
-        color: var(--brand-ivory);
-      }
-      code {
-        font-family: var(--font-mono);
-        color: var(--brand-green);
-      }
-    }
-  }
-</style>

@@ -7,13 +7,18 @@ networks:
 services:
   keepindex-site:
     container_name: keepindex-site
-    image: nginx:alpine@sha256:db35bfc6b2951e7f8a72db5db120288c127ffaeeb4a6d4b95a26fead017d5913
+    build: .
+    image: keepindex-site:local
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
     restart: unless-stopped
     ports:
       - 127.0.0.1:8085:80
-    volumes:
-      - ./dist:/usr/share/nginx/html:ro
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
       - web
     labels:

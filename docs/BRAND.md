@@ -8,7 +8,7 @@ Search your world. Keep it yours.
 keepindex.ing
 ```
 
-The product descriptor is **“Private, local-first federated search.”** Keep this language consistent across product, documentation, packaging, and release communications.
+The product descriptor is **“Private search on your computer. Your choice of AI.”** Keep this language consistent across product, documentation, packaging, and release communications.
 
 ## Brand story
 
@@ -112,7 +112,7 @@ Do not rewrite it as “Search your world, keep it yours,” “Your world. Your
 
 Approved supporting copy:
 
-- Private, local-first federated search.
+- Private search on your computer. Your choice of AI.
 - Your sources. Your models. Your evidence.
 - Web, vault, documents, and private browser memory—ranked together, kept local.
 - Local inference. Inspectable citations. No cloud fallback.

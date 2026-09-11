@@ -1,94 +1,66 @@
-/**
- * Cross-origin access to the private API.
- *
- * KeepIndex binds to 0.0.0.0 for homelab use and serves a user's vault, browser
- * history and search log with no authentication. `origin: '*'` therefore let any
- * page the user happened to be visiting read all of it from their own machine.
- *
- * The homelab access documented in the README stays intact: curl and other shell
- * clients send no Origin at all, and a browser opening the UI on any interface is
- * same-origin. Only a third-party page is refused.
- */
 import { describe, expect, it } from 'bun:test'
 import app from './index'
+import { permitsLocalApiRequest, requireLocalSearchEndpoint } from './local-service-policy'
 
-const LAN_ORIGINS = [
-  'http://127.0.0.1:5173',
-  'http://localhost:5173',
-  'http://localhost:4173',
-  'http://192.168.1.41:5173',
-  'http://10.0.0.7:5173',
-  'http://172.16.4.9:5173',
-  'http://[::1]:5173',
-]
+const local = 'http://localhost:5173'
 
-const FOREIGN_ORIGINS = [
-  'https://evil.example',
-  'http://evil.example',
-  'https://keepindex.evil.example',
-  'null',
-  'https://127.0.0.1.evil.example',
-  'https://localhost.evil.example',
-]
-
-function allowedOriginFor(headers: Headers): string | null {
-  return headers.get('access-control-allow-origin')
-}
-
-describe('private API cross-origin policy', () => {
-  it('never answers a third-party origin with a permissive wildcard', async () => {
-    const response = await app.request('/api/health', {
-      headers: { Origin: 'https://evil.example' },
-    })
-    expect(allowedOriginFor(response.headers)).not.toBe('*')
-  })
-
-  for (const origin of FOREIGN_ORIGINS) {
-    it(`refuses cross-origin reads from ${origin}`, async () => {
-      const response = await app.request('/api/health', { headers: { Origin: origin } })
-      const allowed = allowedOriginFor(response.headers)
-      expect(allowed === null || allowed === '' || allowed === undefined).toBe(true)
+describe('single-machine API boundary', () => {
+  for (const origin of ['https://evil.example', 'null', 'http://192.168.1.41:5173', 'http://localhost:4321']) {
+    it(`rejects writes and preflights from ${origin} before the handler`, async () => {
+      for (const method of ['POST', 'OPTIONS']) {
+        const response = await app.request(`${local}/api/models/select`, {
+          method, headers: { Origin: origin, 'Content-Type': 'application/json' },
+          ...(method === 'POST' ? { body: '{}' } : {}),
+        })
+        expect(response.status).toBe(403)
+        expect(response.headers.get('access-control-allow-origin')).toBeNull()
+        expect(response.headers.get('Cache-Control')).toBe('no-store')
+        expect(response.headers.get('X-Frame-Options')).toBe('DENY')
+      }
     })
   }
-
-  for (const origin of LAN_ORIGINS) {
-    it(`allows the local and homelab origin ${origin}`, async () => {
-      const response = await app.request('/api/health', { headers: { Origin: origin } })
-      expect(allowedOriginFor(response.headers)).toBe(origin)
+  for (const url of [local, 'http://127.0.0.1:5173', 'http://[::1]:5173']) {
+    it(`allows its same-origin browser at ${url}`, async () => {
+      const response = await app.request(`${url}/api/models/select`, {
+        method: 'OPTIONS', headers: { Origin: url, 'Access-Control-Request-Method': 'POST' },
+      })
+      expect(response.status).toBe(204)
+      expect(response.headers.get('access-control-allow-origin')).toBe(url)
     })
   }
-
-  it('still serves a client that sends no Origin at all', async () => {
-    const response = await app.request('/api/health')
-    expect(response.status).toBe(200)
+  it('allows a local CLI but rejects DNS rebinding and conflicting Host headers', () => {
+    expect(permitsLocalApiRequest(new Request(`${local}/api/health`))).toBe(true)
+    expect(permitsLocalApiRequest(new Request('http://attacker.example/api/health'))).toBe(false)
+    expect(permitsLocalApiRequest(new Request(local, { headers: { Host: 'attacker.example' } }))).toBe(false)
+    expect(permitsLocalApiRequest(new Request(local, { headers: { 'Sec-Fetch-Site': 'cross-site' } }))).toBe(false)
   })
+  it('permits an explicit local development origin without allowing remote exceptions', () => {
+    const extras = new Set(['http://localhost:4321', 'https://keepindex.ing'])
+    expect(permitsLocalApiRequest(new Request(local, { headers: { Origin: 'http://localhost:4321' } }), extras)).toBe(true)
+    expect(permitsLocalApiRequest(new Request(local, { headers: { Origin: 'https://keepindex.ing' } }), extras)).toBe(false)
+  })
+})
 
-  it('refuses a third-party preflight for a destructive method', async () => {
-    const response = await app.request('/api/browser-history', {
-      method: 'OPTIONS',
-      headers: {
-        Origin: 'https://evil.example',
-        'Access-Control-Request-Method': 'DELETE',
-      },
+describe('same-machine search provider', () => {
+  it('accepts the bundled service and loopback, preserving a base path', () => {
+    expect(requireLocalSearchEndpoint('http://searxng:8080/')).toBe('http://searxng:8080')
+    expect(requireLocalSearchEndpoint('http://localhost:8888/search-base/')).toBe('http://localhost:8888/search-base')
+  })
+  for (const url of ['http://blade:8888', 'http://192.168.1.1:8888', 'https://search.example', 'http://u:secret@localhost:8888', 'http://localhost:8888?key=secret']) {
+    it(`rejects a remote or credential-bearing search URL: ${url}`, () => {
+      expect(() => requireLocalSearchEndpoint(url)).toThrow('same-machine')
     })
-    const allowed = allowedOriginFor(response.headers)
-    expect(allowed === null || allowed === '' || allowed === undefined).toBe(true)
-  })
+  }
+})
 
-  it('keeps the preflight working for a homelab origin', async () => {
-    const response = await app.request('/api/search', {
-      method: 'OPTIONS',
-      headers: {
-        Origin: 'http://192.168.1.41:5173',
-        'Access-Control-Request-Method': 'POST',
-      },
+
+describe('explicit browser-history selection', () => {
+  for (const body of [{}, { paths: [] }, { paths: [42] }]) {
+    it(`refuses import without selected profiles: ${JSON.stringify(body)}`, async () => {
+      const response = await app.request(`${local}/api/browser-history/import`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      })
+      expect(response.status).toBe(400)
     })
-    expect(allowedOriginFor(response.headers)).toBe('http://192.168.1.41:5173')
-  })
-
-  it('keeps the hardening response headers on every API route', async () => {
-    const response = await app.request('/api/health')
-    expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff')
-    expect(response.headers.get('X-Frame-Options')).toBe('DENY')
-  })
+  }
 })

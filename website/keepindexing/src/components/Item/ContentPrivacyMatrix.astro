@@ -3,232 +3,109 @@ interface Props {
   /** Set to `false` to skip rendering this component and its children. */
   render?: boolean;
 }
-
 const { render = true } = Astro.props;
+const rows = [
+  [
+    "Files & vaults",
+    "Selected folders are indexed on this computer.",
+    "Original files are read locally. Extracted text is stored in the local index.",
+  ],
+  [
+    "Browser history",
+    "Only the profiles you select are imported.",
+    "URL, title, and visit metadata stay in the local index.",
+  ],
+  [
+    "AI answers",
+    "You choose the AI endpoint.",
+    "Local runtimes keep inference here. Selected remote endpoints receive prompts and evidence excerpts.",
+  ],
+  [
+    "Web search",
+    "You choose whether to include the web.",
+    "Search terms reach public engines. Fetched websites receive normal requests.",
+  ],
+  [
+    "This website",
+    "Product information and sample data only.",
+    "Cloudflare and the web host process ordinary website requests; no connection to your private index.",
+  ],
+];
 ---
 
 {
   render && (
-    <div class="privacy-matrix_wrap">
-      <div class="privacy-matrix_table_container">
-        <table class="privacy-matrix_table">
+    <div
+      class="privacyflow_wrap"
+      tabindex="0"
+      role="region"
+      aria-label="Where KeepIndex data goes"
+    >
+      <table>
+        <>
+          <caption>Know what stays here. Know what goes out.</caption>
           <thead>
             <tr>
-              <th scope="col" class="privacy-matrix_th feature">Security &amp; Sovereignty Dimension</th>
-              <th scope="col" class="privacy-matrix_th keepindex">
-                <span class="privacy-matrix_badge">KeepIndex</span>
-              </th>
-              <th scope="col" class="privacy-matrix_th cloud">Perplexity / ChatGPT Search</th>
-              <th scope="col" class="privacy-matrix_th cloud">NotebookLM</th>
-              <th scope="col" class="privacy-matrix_th cloud">Google Search</th>
+              <>
+                <th scope="col">Source</th>
+                <th scope="col">Your control</th>
+                <th scope="col">Data flow</th>
+              </>
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td class="privacy-matrix_td feature">
-                <strong>Where do prompts and evidence go?</strong>
-                <span>Network boundary of search tokens</span>
-              </td>
-              <td class="privacy-matrix_td keepindex">
-                <div class="privacy-matrix_val positive">
-                  <span class="privacy-matrix_check">✓</span>
-                  <span>100% Loopback / LAN only. Public internet model endpoints strictly blocked.</span>
-                </div>
-              </td>
-              <td class="privacy-matrix_td cloud">Cloud SaaS data centers</td>
-              <td class="privacy-matrix_td cloud">Google cloud infrastructure</td>
-              <td class="privacy-matrix_td cloud">Google ad and query clusters</td>
-            </tr>
-
-            <tr>
-              <td class="privacy-matrix_td feature">
-                <strong>Local Vault &amp; File Indexing</strong>
-                <span>Obsidian, local PDFs, codebases</span>
-              </td>
-              <td class="privacy-matrix_td keepindex">
-                <div class="privacy-matrix_val positive">
-                  <span class="privacy-matrix_check">✓</span>
-                  <span>Extracted on host. Read-only mounts. Never leaves your hardware.</span>
-                </div>
-              </td>
-              <td class="privacy-matrix_td cloud">Not supported or requires cloud upload</td>
-              <td class="privacy-matrix_td cloud">Uploaded and stored on Google Drive/servers</td>
-              <td class="privacy-matrix_td cloud">Not supported</td>
-            </tr>
-
-            <tr>
-              <td class="privacy-matrix_td feature">
-                <strong>Private Browser Memory</strong>
-                <span>Opt-in history search</span>
-              </td>
-              <td class="privacy-matrix_td keepindex">
-                <div class="privacy-matrix_val positive">
-                  <span class="privacy-matrix_check">✓</span>
-                  <span>Sanitized URL metadata only. Cookies, tokens, &amp; page bodies discarded.</span>
-                </div>
-              </td>
-              <td class="privacy-matrix_td cloud">Full extension logging or not available</td>
-              <td class="privacy-matrix_td cloud">Not available</td>
-              <td class="privacy-matrix_td cloud">Full account history profiling for ads</td>
-            </tr>
-
-            <tr>
-              <td class="privacy-matrix_td feature">
-                <strong>Hallucination Defense Gate</strong>
-                <span>Post-generation citation verification</span>
-              </td>
-              <td class="privacy-matrix_td keepindex">
-                <div class="privacy-matrix_val positive">
-                  <span class="privacy-matrix_check">✓</span>
-                  <span>Fail-closed sentence gate (&ge;80% coverage). Ungrounded fails to <code>no_evidence</code>.</span>
-                </div>
-              </td>
-              <td class="privacy-matrix_td cloud">Soft hyperlinks; hallucinations presented as fact</td>
-              <td class="privacy-matrix_td cloud">Heuristic citations; occasional synthesis drift</td>
-              <td class="privacy-matrix_td cloud">AI overviews with recurring hallucinations</td>
-            </tr>
-
-            <tr>
-              <td class="privacy-matrix_td feature">
-                <strong>Telemetry &amp; Behavioral Tracking</strong>
-                <span>Usage analytics, query tracking</span>
-              </td>
-              <td class="privacy-matrix_td keepindex">
-                <div class="privacy-matrix_val positive">
-                  <span class="privacy-matrix_check">✓</span>
-                  <span>Zero bytes. No analytics SDKs, no pixels, no telemetry endpoints.</span>
-                </div>
-              </td>
-              <td class="privacy-matrix_td cloud">Session logging, model training opt-outs, trackers</td>
-              <td class="privacy-matrix_td cloud">Google account activity tracking</td>
-              <td class="privacy-matrix_td cloud">Global advertising identification &amp; profiling</td>
-            </tr>
-
-            <tr>
-              <td class="privacy-matrix_td feature">
-                <strong>Inference Hardware Independence</strong>
-                <span>Who owns the intelligence?</span>
-              </td>
-              <td class="privacy-matrix_td keepindex">
-                <div class="privacy-matrix_val positive">
-                  <span class="privacy-matrix_check">✓</span>
-                  <span>llama.cpp, vLLM, Ollama, MLX on your GPU/CPU. Zero API keys.</span>
-                </div>
-              </td>
-              <td class="privacy-matrix_td cloud">Proprietary API subscription required</td>
-              <td class="privacy-matrix_td cloud">Locked to Gemini cloud runtime</td>
-              <td class="privacy-matrix_td cloud">Locked to Google search infra</td>
-            </tr>
+            {rows.map((row) => (
+              <tr>
+                <th scope="row">{row[0]}</th>
+                <td>{row[1]}</td>
+                <td>{row[2]}</td>
+              </tr>
+            ))}
           </tbody>
-        </table>
-      </div>
+        </>
+      </table>
     </div>
   )
 }
-
 <style is:global>
   @layer components {
-    .privacy-matrix_wrap {
-      width: 100%;
-      margin-block: var(--space-5);
-    }
-
-    .privacy-matrix_table_container {
+    .privacyflow_wrap {
       width: 100%;
       overflow-x: auto;
-      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 14%, transparent);
-      border-radius: var(--radius-main);
-      background-color: var(--dark-900);
-      box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.3);
-    }
-
-    .privacy-matrix_table {
-      width: 100%;
-      border-collapse: collapse;
-      text-align: left;
-      font-size: var(--text-small);
-    }
-
-    .privacy-matrix_th {
-      padding: var(--space-3) var(--space-4);
-      background-color: var(--dark-800);
-      font-family: var(--display-family);
-      font-weight: 700;
-      color: var(--brand-ivory);
-      border-bottom: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 12%, transparent);
-
-      &.keepindex {
-        background-color: color-mix(in lab, var(--brand-green) 12%, var(--dark-800));
-        border-inline: var(--border-width) solid color-mix(in lab, var(--brand-green) 30%, transparent);
+      table {
+        width: 100%;
+        min-width: 38rem;
+        border-collapse: collapse;
+        text-align: left;
+        font-size: 0.9rem;
+        line-height: 1.6;
       }
-
-      &.cloud {
-        color: var(--brand-stone);
-        font-weight: 500;
+      caption {
+        text-align: left;
+        font-size: 0.8rem;
+        color: #a7a59b;
+        padding-bottom: 1.25rem;
       }
-    }
-
-    .privacy-matrix_badge {
-      display: inline-block;
-      font-family: var(--display-family);
-      font-size: 1.1rem;
-      font-weight: 800;
-      color: var(--brand-green);
-    }
-
-    .privacy-matrix_td {
-      padding: var(--space-3) var(--space-4);
-      border-bottom: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 8%, transparent);
-      vertical-align: top;
-      line-height: var(--line-height-medium);
-
-      &.feature {
-        display: flex;
-        flex-direction: column;
-        gap: 0.2rem;
-        min-width: 14rem;
-        strong {
-          color: var(--brand-ivory);
-        }
-        span {
-          font-size: 0.75rem;
-          color: var(--brand-stone);
-        }
+      th,
+      td {
+        padding: 1.25rem 1rem;
+        border-bottom: 0.0625rem solid #ffffff22;
+        vertical-align: top;
       }
-
-      &.keepindex {
-        background-color: color-mix(in lab, var(--brand-green) 5%, var(--dark-900));
-        border-inline: var(--border-width) solid color-mix(in lab, var(--brand-green) 20%, transparent);
-        color: var(--brand-ivory);
-        min-width: 16rem;
+      thead th {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #62d66b;
       }
-
-      &.cloud {
-        color: var(--brand-stone);
-        min-width: 10rem;
+      tbody th {
+        width: 20%;
+        font-weight: 550;
       }
-
-      code {
-        font-family: var(--font-mono);
-        color: var(--brand-green);
+      td {
+        color: #c2c6bb;
+        width: 40%;
       }
-    }
-
-    .privacy-matrix_val {
-      display: flex;
-      gap: 0.5rem;
-      align-items: flex-start;
-
-      &.positive {
-        color: var(--brand-ivory);
-      }
-    }
-
-    .privacy-matrix_check {
-      color: var(--brand-green);
-      font-weight: 900;
-      font-size: 1.1em;
-      flex-shrink: 0;
     }
   }
 </style>

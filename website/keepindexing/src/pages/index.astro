@@ -7,440 +7,82 @@ import Eyebrow from "@/components/Typography/Eyebrow.astro";
 import Paragraph from "@/components/Typography/Paragraph.astro";
 import ButtonWrapper from "@/components/Wrapper/ButtonWrapper.astro";
 import Button from "@/components/Button.astro";
-import Grid from "@/components/Wrapper/Grid.astro";
-import Card from "@/components/Item/Card.astro";
-import Accordion from "@/components/Interactive/Accordion.astro";
-import AccordionItem from "@/components/Interactive/AccordionItem.astro";
-import Marquee from "@/components/Interactive/Marquee.astro";
-import Icon from "@/components/Media/Icon.astro";
-import ContentArchitectureGraphic from "@/components/Interactive/ContentArchitectureGraphic.astro";
+import ContentProductHero from "@/components/Interactive/ContentProductHero.astro";
 import ContentDemoLive from "@/components/Interactive/ContentDemoLive.astro";
 import ContentTerminalCli from "@/components/Interactive/ContentTerminalCli.astro";
 import ContentPrivacyMatrix from "@/components/Item/ContentPrivacyMatrix.astro";
-import lockup from "@/assets/brand/keepindex-lockup.svg";
 ---
 
 <Layout
   title="Search your world. Keep it yours."
-  description="KeepIndex is private, local-first federated search. Fuse self-hosted SearXNG, Obsidian vaults, local documents, and opt-in browser history with grounded local inference and inspectable citations."
-  theme="dark"
+  description="Search your selected files, vaults, browser history, and the web with your choice of local or remote AI. Install KeepIndex locally. No hosted index or account."
 >
-  {/* 1. High-Impact Hero Section */}
-  <Section paddingTop="large" paddingBottom="medium" class="hero_section">
-    <ContentWrapper variant="stack" centered={true}>
-      <Eyebrow variant="tag">v0.1.0-alpha · Sovereign Federated Search</Eyebrow>
-
-      <Heading tag="h1" variant="display" maxWidth={26} class="hero_heading">
-        Search your world. <span class="hero_accent">Keep it yours.</span>
-      </Heading>
-
-      <Paragraph maxWidth={56} variant="large" class="hero_lead">
-        KeepIndex fuses self-hosted web search, personal Obsidian vaults, local documents, and opt-in browser history — then uses local models on hardware you control to produce grounded answers with inspectable citations. No telemetry. No cloud fallback.
-      </Paragraph>
-
-      <ButtonWrapper class="hero_buttons">
-        <Button element="link" href="/docs" emphasis="primary">
-          Start with Docker
-        </Button>
-        <Button element="link" href="#demo" emphasis="secondary">
-          Explore Live Demo ↓
-        </Button>
-        <Button
-          element="link"
-          href="https://github.com/akougkas/keepindex"
-          target="_blank"
-          rel="noopener noreferrer"
-          emphasis="secondary"
-        >
-          GitHub (Source) ↗
-        </Button>
-      </ButtonWrapper>
-
-      {/* One-Line Shell Quickstart Snippet */}
-      <div class="hero_snippet">
-        <span class="hero_snippet_prompt">$</span>
-        <code class="hero_snippet_code">git clone https://github.com/akougkas/keepindex.git &amp;&amp; cd keepindex &amp;&amp; ./start.sh</code>
-        <button class="hero_snippet_copy" id="hero-copy-btn" type="button" aria-label="Copy installation command">
-          Copy
-        </button>
-      </div>
-
-      {/* Brand Lockup Hero Badge */}
-      <div class="hero_lockup_preview">
-        <Icon src={lockup} variant="full-width" class="hero_lockup_img" />
-      </div>
-    </ContentWrapper>
+  <ContentProductHero />
+  <Section theme="light" paddingTop="large" paddingBottom="large" id="demo">
+    <ContentWrapper variant="stack"
+      ><Eyebrow>From scattered sources to something useful</Eyebrow><Heading
+        tag="h2"
+        variant="h1"
+        maxWidth={22}>You already saved it.<br />Now find it again.</Heading
+      ><Paragraph maxWidth={62} variant="large"
+        >The note you wrote. The document you downloaded. The page you visited.
+        Search them together, then ask your selected model to connect what the
+        sources actually say.</Paragraph
+      ></ContentWrapper
+    >
+    <ContentDemoLive />
   </Section>
-
-  {/* 2. Interactive Live Demo Section */}
-  <Section paddingTop="medium" paddingBottom="large" id="demo-section">
-    <ContentWrapper variant="stack">
-      <Eyebrow>Interactive Simulator</Eyebrow>
-      <Heading tag="h2" variant="h1" maxWidth={28}>
-        Experience Sovereign Retrieval in Action
-      </Heading>
-      <Paragraph maxWidth={52} variant="main">
-        Test KeepIndex's query engine right here. Switch between Grounded Answers, Federated Search, and Deep Research. Click inline citations to inspect source provenance, or test how the post-generation citation gate quarantines ungrounded hallucinations in real time.
-      </Paragraph>
-
-      <ContentDemoLive />
-    </ContentWrapper>
-  </Section>
-
-  {/* 3. The Sovereign Architecture Scaling Graphic */}
-  <Section paddingTop="medium" paddingBottom="large">
-    <ContentWrapper variant="stack">
-      <Eyebrow>Architecture</Eyebrow>
-      <Heading tag="h2" variant="h1" maxWidth={30}>
-        The Sovereign Lattice: Built to Fail Closed
-      </Heading>
-      <Paragraph maxWidth={54} variant="main">
-        KeepIndex treats all retrieved text as untrusted evidence, not as instructions. Prompts receive a bounded evidence pack, and generated sentences are strictly validated against that pack before anything reaches the UI or SQLite record.
-      </Paragraph>
-
-      <ContentArchitectureGraphic />
-    </ContentWrapper>
-  </Section>
-
-  {/* 4. Four Sovereign Foundations (Grid of Cards) */}
-  <Section paddingTop="medium" paddingBottom="large">
-    <ContentWrapper variant="stack">
-      <Eyebrow>Core Foundations</Eyebrow>
-      <Heading tag="h2" variant="h1" maxWidth={30}>
-        Engineered for Absolute Knowledge Sovereignty
-      </Heading>
-      <Paragraph maxWidth={50} variant="main">
-        Four non-negotiable architectural commitments guarantee your search context and private documents never leave your physical machine.
-      </Paragraph>
-
-      <Grid medium={2} large={4} class="features_grid">
-        <Card
-          eyebrow="01 · FEDERATED SEARCH"
-          heading="Unified Evidence Paths"
-          text="Fuse self-hosted SearXNG web queries, Obsidian vaults with wikilinks and tags, local PDFs/code, and sanitized browser history into one ranked candidate set."
-          buttonLabel="Explore Features →"
-          buttonHref="/features"
-          theme="dark"
-        />
-
-        <Card
-          eyebrow="02 · ZERO CLOUD INFERENCE"
-          heading="100% Local Models"
-          text="Connects directly to llama.cpp, vLLM, Ollama, MLX, or Triton. Public OpenAI/Anthropic/Google cloud hostnames, IPs, and redirects are strictly blocked at the socket layer."
-          buttonLabel="Local AI Runtimes →"
-          buttonHref="/inference"
-          theme="dark"
-        />
-
-        <Card
-          eyebrow="03 · GROUNDING GATE"
-          heading="Fail-Closed Citations"
-          text="Sentence-level evidence coverage must hit ≥80%. Responses with ungrounded claims or hallucinated out-of-pack citations are quarantined as status: no_evidence."
-          buttonLabel="Citation Protocol →"
-          buttonHref="/features#citation-gate"
-          theme="dark"
-        />
-
-        <Card
-          eyebrow="04 · SOVEREIGN PERSISTENCE"
-          heading="Local SQLite WAL"
-          text="Search history, collections, and durable per-query evidence records stay in your local SQLite WAL database. Zero external accounts, zero tracking pixels, zero analytics."
-          buttonLabel="View Architecture →"
-          buttonHref="/architecture"
-          theme="dark"
-        />
-      </Grid>
-    </ContentWrapper>
-  </Section>
-
-  {/* 5. Supported AI Engines Marquee */}
-  <Section paddingTop="small" paddingBottom="medium" class="marquee_section">
-    <div class="marquee_intro">
-      <Eyebrow variant="tag">Broad Engine Compatibility</Eyebrow>
-      <Heading tag="h3" variant="h4" class="marquee_title">
-        Runs with your favorite local inference backends
-      </Heading>
-    </div>
-    <Marquee label="Supported Local Inference Engines" direction="forwards">
-      <div class="engine_pill">llama.cpp / llama-server</div>
-      <div class="engine_pill">vLLM (PagedAttention)</div>
-      <div class="engine_pill">Ollama (Native &amp; OpenAI format)</div>
-      <div class="engine_pill">MLX-LM (Apple Silicon M-Series)</div>
-      <div class="engine_pill">SGLang (RadixAttention)</div>
-      <div class="engine_pill">LM Studio (Local Server)</div>
-      <div class="engine_pill">Lemonade Server (ROCm / CUDA)</div>
-      <div class="engine_pill">NVIDIA Triton (Compatible Frontend)</div>
-    </Marquee>
-  </Section>
-
-  {/* 6. Interactive Terminal CLI Section */}
-  <Section paddingTop="medium" paddingBottom="large">
-    <ContentWrapper variant="stack">
-      <Eyebrow>Operational Control</Eyebrow>
-      <Heading tag="h2" variant="h1" maxWidth={30}>
-        The <code>keepidx</code> CLI: Fast, Quiet, Deterministic
-      </Heading>
-      <Paragraph maxWidth={52} variant="main">
-        No bloated background daemons. A lean Bun/TypeScript administration tool for prerequisite verification, health inspection, container lifecycle, and scriptable JSON health probes.
-      </Paragraph>
-
-      <ContentTerminalCli />
-    </ContentWrapper>
-  </Section>
-
-  {/* 7. Privacy Sovereign Comparison Matrix */}
-  <Section paddingTop="medium" paddingBottom="large">
-    <ContentWrapper variant="stack">
-      <Eyebrow>Sovereignty Breakdown</Eyebrow>
-      <Heading tag="h2" variant="h1" maxWidth={30}>
-        Why KeepIndex vs Cloud Alternatives
-      </Heading>
-      <Paragraph maxWidth={54} variant="main">
-        Compare network containment boundaries, local document privacy, telemetry retention, and hallucination defenses across modern search tools.
-      </Paragraph>
-
-      <ContentPrivacyMatrix />
-    </ContentWrapper>
-  </Section>
-
-  {/* 8. Frequently Asked Questions Accordion */}
-  <Section paddingTop="medium" paddingBottom="large">
-    <ContentWrapper variant="stack">
-      <Eyebrow>Clarifications</Eyebrow>
-      <Heading tag="h2" variant="h1" maxWidth={28}>
-        Frequently Asked Questions
-      </Heading>
-      <Paragraph maxWidth={50} variant="main">
-        Everything you need to know about local-first architecture, privacy boundaries, and deployment.
-      </Paragraph>
-
-      <Accordion single={true} openFirst={true} class="faq_accordion">
-        <AccordionItem heading="Does KeepIndex send my searches or files to OpenAI or Anthropic?">
-          <p>
-            <strong>Never.</strong> KeepIndex has no API-key configuration, no cloud fallback adapter, and no telemetry collector. Its provider layer strictly rejects public IP addresses and public DNS names. If your local model is offline, search remains fully functional, while answer and research modes report that local inference is unavailable instead of sending your private prompt to a third party.
-          </p>
-        </AccordionItem>
-
-        <AccordionItem heading="How does KeepIndex enforce the 80% citation grounding gate?">
-          <p>
-            After the local LLM generates a response, KeepIndex tokenizes sentences and parses all inline <code>[n]</code> citations. It validates that every referenced identifier exists inside the bounded evidence pack and enforces lexical support between each sentence and its source. If sentence-level evidence coverage falls below 80% after bounded repair, the response is rejected as <code>status: no_evidence</code> rather than presenting an unverified hallucination.
-          </p>
-        </AccordionItem>
-
-        <AccordionItem heading="Can I run KeepIndex on my homelab server (like an Ubuntu blade or mini PC)?">
-          <p>
-            <strong>Yes!</strong> KeepIndex is designed for homelab enthusiasts and privacy advocates. The Compose stack publishes the private UI/API on port <code>5173</code> and SearXNG on port <code>8888</code>. You can bind port 5173 to loopback or a private LAN / Tailscale IP (such as <code>100.64.0.0/10</code>), while keeping SearXNG bound to loopback. It connects seamlessly to any model server running on your GPU nodes.
-          </p>
-        </AccordionItem>
-
-        <AccordionItem heading="How does private browser memory work without leaking passwords or cookies?">
-          <p>
-            Browser history indexing is strictly opt-in. KeepIndex discovers Chromium and Firefox profiles on your host, copies the history SQLite database to a temporary location, and extracts only URL, page title, and visit timestamps. It never imports page bodies, session cookies, form submissions, or saved passwords. Any credential-bearing query parameters or OAuth token fragments in URLs are stripped before reaching SQLite.
-          </p>
-        </AccordionItem>
-
-        <AccordionItem heading="What document formats can KeepIndex extract and index?">
-          <p>
-            KeepIndex directly indexes plain text, Markdown, and source code. It recognize Obsidian vaults by their <code>.obsidian</code> directory, indexing wikilinks and YAML frontmatter tags as searchable metadata. For PDFs, it utilizes <code>pdftotext</code>. For DOCX, ODT, RTF, and EPUB, it utilizes Pandoc. Sensitive files matching secret patterns (such as <code>.env</code>, SSH keys, or recovery tokens) are strictly excluded.
-          </p>
-        </AccordionItem>
-      </Accordion>
-    </ContentWrapper>
-  </Section>
-
-  {/* 9. High-Conversion Launch CTA */}
   <Section paddingTop="large" paddingBottom="large">
-    <ContentWrapper variant="card" class="theme-dark cta_wrapper">
-      <Eyebrow variant="tag">Deploy in 60 Seconds</Eyebrow>
-      <Heading tag="h2" variant="display" maxWidth={26}>
-        Take back your search today.
-      </Heading>
-      <Paragraph maxWidth={42} variant="large" class="cta_lead">
-        One command launches KeepIndex and SearXNG inside a private Compose network. Point it at your local llama.cpp or Ollama runtime, index your files, and search your world with complete sovereignty.
-      </Paragraph>
-
-      <ButtonWrapper class="cta_buttons">
-        <Button element="link" href="/docs" emphasis="primary">
-          Get Started with Quickstart Guide →
-        </Button>
-        <Button
-          element="link"
-          href="https://github.com/akougkas/keepindex"
-          target="_blank"
-          rel="noopener noreferrer"
-          emphasis="secondary"
-        >
-          Star akougkas/keepindex on GitHub
-        </Button>
-      </ButtonWrapper>
-    </ContentWrapper>
+    <ContentWrapper variant="columns"
+      ><div>
+        <Eyebrow>A deliberate boundary</Eyebrow><Heading
+          tag="h2"
+          variant="h1"
+          maxWidth={19}>Your computer is the workspace.</Heading>
+      </div><Fragment slot="column2"
+        ><Paragraph variant="large"
+          >KeepIndex runs beside your data. You choose the folders and browser
+          profiles it can read. It builds an index there. AI runs locally by
+          default; you can explicitly choose a remote gateway.</Paragraph
+        ><Paragraph
+          >Open the local app at localhost:5173. This public website never
+          connects to that installation. A second device has its own workspace;
+          pairing and federation are deferred.</Paragraph
+        ><ButtonWrapper
+          ><Button element="link" href="/architecture" emphasis="secondary"
+            >See the architecture ↗</Button
+          ></ButtonWrapper
+        ></Fragment
+      ></ContentWrapper
+    >
+    <ContentPrivacyMatrix />
+    <Paragraph maxWidth={75}
+      >Including the web sends your search terms to public engines. Files,
+      Vaults, Docs, and History retrieve their local source category without web
+      discovery. Local storage is protected by your computer’s security;
+      KeepIndex does not encrypt its SQLite index.</Paragraph
+    >
+  </Section>
+  <Section theme="brand" paddingTop="large" paddingBottom="large">
+    <ContentWrapper variant="columns"
+      ><div>
+        <Eyebrow>Make it yours</Eyebrow><Heading
+          tag="h2"
+          variant="h1"
+          maxWidth={18}>Start with one computer. And one folder.</Heading
+        ><Paragraph
+          >Install Docker, connect your preferred AI runtime, and grant your
+          first folder. No account to create. No server to rent.</Paragraph
+        ><ButtonWrapper
+          ><Button element="link" href="/docs" emphasis="primary"
+            >Follow the installation guide ↗</Button
+          ><Button
+            element="link"
+            href="https://github.com/akougkas/keepindex"
+            emphasis="secondary">Read the source ↗</Button
+          ></ButtonWrapper>
+      </div><Fragment slot="column2"><ContentTerminalCli /></Fragment
+      ></ContentWrapper
+    >
   </Section>
 </Layout>
-
-<script>
-  // Copy Hero Snippet
-  const heroCopyBtn = document.getElementById("hero-copy-btn");
-  if (heroCopyBtn) {
-    heroCopyBtn.addEventListener("click", async () => {
-      const code = "git clone https://github.com/akougkas/keepindex.git && cd keepindex && ./start.sh";
-      await navigator.clipboard.writeText(code);
-      heroCopyBtn.textContent = "Copied!";
-      setTimeout(() => {
-        heroCopyBtn.textContent = "Copy";
-      }, 1500);
-    });
-  }
-</script>
-
-<style is:global>
-  @layer components {
-    .hero_section {
-      text-align: center;
-      position: relative;
-    }
-
-    .hero_heading {
-      margin-inline: auto;
-    }
-
-    .hero_accent {
-      color: var(--brand-green);
-    }
-
-    .hero_lead {
-      margin-inline: auto;
-      color: var(--brand-ivory);
-      line-height: var(--line-height-large);
-    }
-
-    .hero_buttons {
-      justify-content: center;
-      margin-top: var(--space-4);
-    }
-
-    .hero_snippet {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--space-3);
-      background-color: var(--dark-900);
-      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 14%, transparent);
-      border-radius: var(--radius-small);
-      padding: 0.625rem 1rem;
-      max-width: 100%;
-      overflow-x: auto;
-      margin-top: var(--space-3);
-    }
-
-    .hero_snippet_prompt {
-      color: var(--brand-green);
-      font-family: var(--font-mono);
-      font-weight: 700;
-    }
-
-    .hero_snippet_code {
-      font-family: var(--font-mono);
-      font-size: var(--text-small);
-      color: var(--brand-ivory);
-      white-space: nowrap;
-    }
-
-    .hero_snippet_copy {
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      color: var(--brand-ink);
-      background-color: var(--brand-green);
-      border: 0;
-      padding: 0.25rem 0.625rem;
-      border-radius: calc(var(--radius-small) - 0.125rem);
-      font-weight: 700;
-      cursor: pointer;
-      margin-left: auto;
-      transition: all var(--hover-duration) var(--hover-ease);
-      &:hover {
-        background-color: var(--brand-ivory);
-      }
-    }
-
-    .hero_lockup_preview {
-      margin-top: var(--space-6);
-      width: 100%;
-      max-width: 52rem;
-      border-radius: 1.5rem;
-      overflow: hidden;
-      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 12%, transparent);
-      box-shadow: 0 2rem 4rem rgba(0, 0, 0, 0.5);
-    }
-
-    .hero_lockup_img {
-      width: 100%;
-      height: auto;
-    }
-
-    .features_grid {
-      margin-top: var(--space-4);
-    }
-
-    .marquee_section {
-      border-block: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 10%, transparent);
-      background-color: var(--dark-900);
-      padding-block: var(--space-5);
-    }
-
-    .marquee_intro {
-      text-align: center;
-      margin-bottom: var(--space-4);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: var(--space-2);
-    }
-
-    .marquee_title {
-      color: var(--brand-ivory);
-    }
-
-    .engine_pill {
-      font-family: var(--font-mono);
-      font-size: var(--text-small);
-      color: var(--brand-ivory);
-      background-color: var(--dark-800);
-      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 14%, transparent);
-      border-radius: var(--radius-round);
-      padding: 0.5rem 1.25rem;
-      margin-inline: 0.5rem;
-      white-space: nowrap;
-      transition: border-color var(--hover-duration) var(--hover-ease);
-      &:hover {
-        border-color: var(--brand-green);
-        color: var(--brand-green);
-      }
-    }
-
-    .faq_accordion {
-      margin-top: var(--space-4);
-      width: 100%;
-      max-width: 56rem;
-    }
-
-    .cta_wrapper {
-      background: radial-gradient(circle at top right, rgba(98, 214, 107, 0.12), transparent 50%), var(--dark-900);
-      border: var(--border-width) solid color-mix(in lab, var(--brand-green) 30%, transparent);
-      padding: var(--space-7) var(--space-5);
-      text-align: center;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-
-    .cta_lead {
-      margin-inline: auto;
-      margin-top: var(--space-3);
-      color: var(--brand-ivory);
-    }
-
-    .cta_buttons {
-      justify-content: center;
-      margin-top: var(--space-5);
-    }
-  }
-</style>

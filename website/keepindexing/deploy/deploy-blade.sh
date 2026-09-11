@@ -1,32 +1,20 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SITE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REMOTE=${REMOTE:-blade}
 REMOTE_DIR=${REMOTE_DIR:-/home/akougkas/webhosting/keepindex-site}
+[[ "$REMOTE" =~ ^[a-zA-Z0-9_.@-]+$ && "$REMOTE_DIR" =~ ^/[a-zA-Z0-9_./-]+$ ]] || {
+  echo 'Use a simple SSH host alias and absolute deployment directory.' >&2; exit 2;
+}
 
-echo "==> Checking and building KeepIndex website..."
 npm --prefix "$SITE_DIR" run check
 npm --prefix "$SITE_DIR" run build
-
-echo "==> Ensuring remote directory exists on $REMOTE ($REMOTE_DIR)..."
 ssh "$REMOTE" "mkdir -p '$REMOTE_DIR/dist'"
-
-echo "==> Syncing compose.yml and nginx.conf..."
-rsync -avz "$SCRIPT_DIR/compose.yml" "$REMOTE:$REMOTE_DIR/compose.yml"
-rsync -avz "$SCRIPT_DIR/nginx.conf" "$REMOTE:$REMOTE_DIR/nginx.conf"
-
-echo "==> Syncing build assets to $REMOTE..."
-rsync -avz --delete "$SITE_DIR/dist/" "$REMOTE:$REMOTE_DIR/dist/"
-
-echo "==> Starting/updating keepindex-site container on $REMOTE..."
-ssh "$REMOTE" "cd '$REMOTE_DIR' && docker compose up -d"
-
-echo "==> Testing local health endpoint on $REMOTE..."
-ssh "$REMOTE" "curl -sI http://127.0.0.1:8085/ | head -n 5"
-
-echo "==> Testing Traefik routing on $REMOTE for Host: keepindex.ing..."
-ssh "$REMOTE" "curl -sI -H 'Host: keepindex.ing' http://127.0.0.1:80/ | head -n 5"
-
-echo "==> KeepIndex website successfully deployed to $REMOTE!"
+rsync -az "$SCRIPT_DIR/compose.yml" "$SCRIPT_DIR/nginx.conf" "$SCRIPT_DIR/Dockerfile" "$REMOTE:$REMOTE_DIR/"
+# The running container serves its built image, so staging new assets cannot mix releases.
+rsync -az --delete "$SITE_DIR/dist/" "$REMOTE:$REMOTE_DIR/dist/"
+ssh "$REMOTE" "cd '$REMOTE_DIR' && docker compose up -d --build --wait --wait-timeout 60"
+ssh "$REMOTE" "curl -fsS -o /dev/null http://127.0.0.1:8085/ && curl -fsS -o /dev/null -H 'Host: keepindex.ing' http://127.0.0.1/"
+echo 'Static site deployed and checked through nginx and Traefik. Public DNS/TLS is a separate check.'

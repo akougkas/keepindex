@@ -22,7 +22,9 @@ const { render = true } = Astro.props;
             </a>
             <p class="footer_tagline">{SITE_TAGLINE}</p>
             <p class="footer_desc text-style-small">
-              Private, local-first federated search. Unifying self-hosted SearXNG, Obsidian vaults, local documents, and browser memory with verified citations and zero cloud fallback.
+              Private search on your computer. Your choice of AI. Your selected
+              files, vaults, browser history, and the web, in a workspace
+              installed where your data lives.
             </p>
             <div class="footer_domain_badge">
               <span class="footer_dot" />
@@ -33,21 +35,57 @@ const { render = true } = Astro.props;
           <div class="footer_nav_group">
             <p class="footer_nav_heading">Product</p>
             <ul class="footer_nav_list">
-              <li><a class="footer_link" href="/features">Features</a></li>
-              <li><a class="footer_link" href="/inference">Local AI Runtimes</a></li>
-              <li><a class="footer_link" href="/architecture">System Architecture</a></li>
-              <li><a class="footer_link" href="/architecture#homelab">Homelab Clusters</a></li>
-              <li><a class="footer_link" href="/#demo">Interactive Demo</a></li>
+              <li>
+                <a class="footer_link" href="/features">
+                  Features
+                </a>
+              </li>
+              <li>
+                <a class="footer_link" href="/inference">
+                  AI connections
+                </a>
+              </li>
+              <li>
+                <a class="footer_link" href="/architecture">
+                  System Architecture
+                </a>
+              </li>
+              <li>
+                <a class="footer_link" href="/architecture#single-machine">
+                  One-computer boundary
+                </a>
+              </li>
+              <li>
+                <a class="footer_link" href="/#demo">
+                  Sample workspace
+                </a>
+              </li>
             </ul>
           </div>
 
           <div class="footer_nav_group">
             <p class="footer_nav_heading">Developers & Docs</p>
             <ul class="footer_nav_list">
-              <li><a class="footer_link" href="/docs">Quickstart Guide</a></li>
-              <li><a class="footer_link" href="/docs#cli"><code>keepidx</code> CLI</a></li>
-              <li><a class="footer_link" href="/docs#docker">Docker Compose</a></li>
-              <li><a class="footer_link" href="/docs#api">REST / SSE API</a></li>
+              <li>
+                <a class="footer_link" href="/docs">
+                  Quickstart Guide
+                </a>
+              </li>
+              <li>
+                <a class="footer_link" href="/docs#cli">
+                  <code>keepidx</code> CLI
+                </a>
+              </li>
+              <li>
+                <a class="footer_link" href="/docs#docker">
+                  Docker Compose
+                </a>
+              </li>
+              <li>
+                <a class="footer_link" href="/docs#api">
+                  REST / SSE API
+                </a>
+              </li>
               <li>
                 <a
                   class="footer_link"
@@ -62,24 +100,45 @@ const { render = true } = Astro.props;
           </div>
 
           <div class="footer_nav_group">
-            <p class="footer_nav_heading">Sovereignty</p>
+            <p class="footer_nav_heading">Privacy & control</p>
             <ul class="footer_nav_list">
-              <li><a class="footer_link" href="/privacy">Privacy Manifest</a></li>
-              <li><a class="footer_link" href="/privacy#threat-model">Threat Model</a></li>
-              <li><a class="footer_link" href="/privacy#sanitization">Credential Stripping</a></li>
-              <li><a class="footer_link" href="/inference#endpoint-policy">DNS-Free Policy</a></li>
-              <li><a class="footer_link" href="/docs#backup">State Backup</a></li>
+              <li>
+                <a class="footer_link" href="/privacy">
+                  Privacy & data flow
+                </a>
+              </li>
+              <li>
+                <a class="footer_link" href="/privacy#storage">
+                  Local storage
+                </a>
+              </li>
+              <li>
+                <a class="footer_link" href="/privacy#control">
+                  Source access
+                </a>
+              </li>
+              <li>
+                <a class="footer_link" href="/inference#boundary">
+                  AI endpoint choices
+                </a>
+              </li>
+              <li>
+                <a class="footer_link" href="/docs#cli">
+                  Maintenance & backup
+                </a>
+              </li>
             </ul>
           </div>
         </div>
 
         <div class="footer_bottom">
           <p class="footer_copyright text-style-small">
-            &copy; <span id="year">{new Date().getFullYear()}</span> {SITE_NAME}. Open source under Apache 2.0 / MIT.
+            &copy; <span id="year">{new Date().getFullYear()}</span> {SITE_NAME}
+            . Open source under Apache 2.0 / MIT.
           </p>
           <div class="footer_badges">
             <span class="footer_badge">Zero Telemetry</span>
-            <span class="footer_badge">100% Local Inference</span>
+            <span class="footer_badge">Local AI + Your Endpoints</span>
             <span class="footer_badge">HSTS Preloaded</span>
           </div>
         </div>
@@ -163,7 +222,8 @@ const { render = true } = Astro.props;
       padding: 0.25rem 0.625rem;
       border-radius: var(--radius-round);
       background-color: color-mix(in lab, var(--brand-green) 12%, transparent);
-      border: var(--border-width) solid color-mix(in lab, var(--brand-green) 30%, transparent);
+      border: var(--border-width) solid
+        color-mix(in lab, var(--brand-green) 30%, transparent);
       font-family: var(--font-mono);
       font-size: 0.75rem;
       color: var(--brand-green);
@@ -244,8 +304,8 @@ const { render = true } = Astro.props;
       border-radius: var(--radius-small);
       background-color: color-mix(in lab, var(--brand-stone) 10%, transparent);
       color: var(--brand-stone);
-      border: var(--border-width) solid color-mix(in lab, var(--brand-stone) 20%, transparent);
+      border: var(--border-width) solid
+        color-mix(in lab, var(--brand-stone) 20%, transparent);
     }
   }
 </style>
-

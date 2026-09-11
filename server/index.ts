@@ -1,3 +1,5 @@
+import { AiConnections, describeAiConnection, aiConnectionsPath, defaultAiConnections, type ConnectionModel, type AiConnectionConfig } from './ai-connections'
+import { permitsLocalApiRequest, requireLocalSearchEndpoint } from './local-service-policy'
 import { Hono, type Context } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { cors } from 'hono/cors'
@@ -57,13 +59,10 @@ import {
 } from './document-extraction'
 import { readKeepIndexEnvironment } from './environment'
 import {
-  LocalInferenceTransport,
   getInferenceResponseModel,
 } from './inference-adapter'
 import {
   LOCAL_INFERENCE_REDIRECT_POLICY,
-  requireLocalInferenceEndpoint,
-  resolveInferenceAdapter,
 } from './inference-endpoint-policy'
 import {
   fuseFederatedSearch,
@@ -103,40 +102,24 @@ const app = new Hono()
 export const API_REQUEST_BODY_LIMIT_BYTES = 3_000_000
 const API_REQUEST_BODY_LIMIT_MESSAGE = 'request body exceeds the 3 MB safety limit'
 
-const PRIVATE_HOST_PATTERN =
-  /^(?:localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[::1\]|::1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})$/i
-
 const EXTRA_ALLOWED_ORIGINS = new Set(
-  (readKeepIndexEnvironment('ALLOWED_ORIGINS') ?? '')
-    .split(',')
-    .map((value) => value.trim().replace(/\/$/, ''))
-    .filter(Boolean)
+  (readKeepIndexEnvironment('ALLOWED_ORIGINS') ?? '').split(',').map((value) => value.trim()).filter(Boolean)
 )
 
-/**
- * The API has no authentication and serves the vault, the browser-history index
- * and the search log, so `origin: '*'` let any page the user was browsing read
- * all of it from their own machine. Loopback and RFC1918 origins stay allowed,
- * which covers every documented use: the launcher's Chrome app window and a
- * browser on another homelab host are both same-origin anyway, and shell clients
- * send no Origin at all. Set KEEPINDEX_ALLOWED_ORIGINS to add others.
- */
-function allowedApiOrigin(origin: string): string | null {
-  if (!origin) return null
-  if (EXTRA_ALLOWED_ORIGINS.has(origin.replace(/\/$/, ''))) return origin
-  try {
-    const { protocol, hostname } = new URL(origin)
-    if (protocol !== 'http:' && protocol !== 'https:') return null
-    return PRIVATE_HOST_PATTERN.test(hostname) ? origin : null
-  } catch {
-    return null
+app.use('/api/*', async (c, next) => {
+  c.header('X-Content-Type-Options', 'nosniff')
+  c.header('X-Frame-Options', 'DENY')
+  c.header('Cache-Control', 'no-store')
+  if (!permitsLocalApiRequest(c.req.raw, EXTRA_ALLOWED_ORIGINS)) {
+    return c.json({ error: 'KeepIndex is available only from its local application on this computer.' }, 403)
   }
-}
+  await next()
+})
 
 app.use(
   '/api/*',
   cors({
-    origin: (origin) => allowedApiOrigin(origin) ?? undefined,
+    origin: (origin, c) => permitsLocalApiRequest(c.req.raw, EXTRA_ALLOWED_ORIGINS) ? origin : undefined,
     allowHeaders: ['Content-Type', 'Authorization', 'If-Match', 'If-None-Match'],
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     exposeHeaders: ['Content-Type', 'ETag'],
@@ -174,11 +157,7 @@ function boundedEnvInt(raw: string | undefined, fallback: number, minimum: numbe
   return Math.min(maximum, Math.max(minimum, parsed))
 }
 
-const SEARXNG_URL = process.env.SEARXNG_URL || 'http://127.0.0.1:8888'
-const LLM_URL = requireLocalInferenceEndpoint(process.env.LLM_URL || 'http://127.0.0.1:8080')
-const LLM_API_KEY = process.env.LLM_API_KEY?.trim()
-const EMBEDDING_MODEL = readKeepIndexEnvironment('EMBEDDING_MODEL') || ''
-const INFERENCE_TRANSPORT = new LocalInferenceTransport(LLM_URL, resolveInferenceAdapter(), undefined, LLM_API_KEY)
+const SEARXNG_URL = requireLocalSearchEndpoint(process.env.SEARXNG_URL || 'http://127.0.0.1:8888')
 const WEB_SEARCH_PROVIDER = 'searxng'
 const LOCAL_SEARCH_PROVIDER = 'local-hybrid-bm25'
 const HISTORY_SEARCH_PROVIDER = 'browser-history-fts5'
@@ -186,29 +165,19 @@ const TEST_DEFAULT_MODEL = process.env.NODE_ENV === 'test' ? 'test-default-model
 const TEST_FALLBACK_MODEL = process.env.NODE_ENV === 'test' ? 'test-fallback-model' : ''
 export const DEFAULT_MODEL = process.env.LLM_MODEL?.trim() || TEST_DEFAULT_MODEL
 export const FALLBACK_MODEL = process.env.LLM_FALLBACK_MODEL?.trim() || TEST_FALLBACK_MODEL
-let activeDefaultModel = DEFAULT_MODEL
-
-type ServerModelInfo = {
-  id: string
-  aliases: string[]
-  tags: string[]
-  isReasoning: boolean
-}
-
+type ServerModelInfo = ConnectionModel
 const responseModel = new WeakMap<Response, string>()
 const llmResponseCleanup = new WeakMap<Response, () => void>()
-
-let knownModels: ServerModelInfo[] = [
-  ...(DEFAULT_MODEL
-    ? [{ id: DEFAULT_MODEL, aliases: [], tags: ['configured-default'], isReasoning: inferReasoningModel(DEFAULT_MODEL, []) }]
-    : []),
-  ...(FALLBACK_MODEL && FALLBACK_MODEL !== DEFAULT_MODEL
-    ? [{ id: FALLBACK_MODEL, aliases: [], tags: ['configured-fallback'], isReasoning: inferReasoningModel(FALLBACK_MODEL, []) }]
-    : []),
-]
+const initialConnections = defaultAiConnections().map((config) => config.id === 'configured'
+  ? { ...config, defaultModel: DEFAULT_MODEL, fallbackModel: FALLBACK_MODEL } : config)
+const aiConnections = new AiConnections(initialConnections, aiConnectionsPath())
+const ai = () => aiConnections.current()
+ai().models = [ai().defaultModel, ai().fallbackModel].filter((id, index, ids): id is string => Boolean(id) && ids.indexOf(id) === index)
+  .map((id) => ({ id, aliases: [], tags: [], isReasoning: inferReasoningModel(id, []) }))
+app.use('/api/*', (_c, next) => aiConnections.run(next))
 
 const ENGINE_UNAVAILABLE_MESSAGE =
-  'Engine unavailable. Check that the configured local inference server is running.'
+  'Engine unavailable. Check that the selected AI endpoint is running.'
 const SEARCH_UNAVAILABLE_MESSAGE =
   'Search unavailable. Check that SearXNG is running (docker compose up -d).'
 const INVALID_VAULT_PATH_MESSAGE =
@@ -861,7 +830,7 @@ function isRetryableLlmStatus(status: number): boolean {
 
 function normalizeModel(model?: unknown): string {
   const candidate = typeof model === 'string' ? model.trim().replace(/[\u0000-\u001f\u007f]/g, '') : ''
-  return candidate ? candidate.slice(0, 240) : activeDefaultModel
+  return candidate ? candidate.slice(0, 240) : ai().activeModel
 }
 
 function modelGenerationPolicy(model: string): { temperature: number; compactContext: boolean } {
@@ -909,10 +878,10 @@ function findAdvertisedModel(models: ServerModelInfo[], requested: string): Serv
 
 function adoptServerModels(models: ServerModelInfo[]): void {
   if (models.length === 0) return
-  knownModels = models
+  ai().models = models
   const advertisedIds = new Set(models.map((model) => model.id))
-  if (!advertisedIds.has(activeDefaultModel)) {
-    activeDefaultModel = findAdvertisedModel(models, DEFAULT_MODEL)?.id ?? models[0].id
+  if (!advertisedIds.has(ai().activeModel)) {
+    ai().activeModel = findAdvertisedModel(models, ai().defaultModel || '')?.id ?? models[0].id
   }
 }
 
@@ -969,17 +938,17 @@ async function fetchLlmChatCompletions(
   const retries = options.retries ?? LLM_MAX_RETRIES
   const timeoutMs =
     options.timeoutMs ?? (options.stream ? LLM_STREAM_TIMEOUT_MS : LLM_REQUEST_TIMEOUT_MS)
-  let requestedModel = normalizeModel(options.model || activeDefaultModel)
+  let requestedModel = normalizeModel(options.model || ai().activeModel)
   if (!requestedModel) {
     try {
-      const response = await INFERENCE_TRANSPORT.models(AbortSignal.timeout(4000))
+      const response = await ai().transport.models(AbortSignal.timeout(4000))
       if (response.ok) adoptServerModels(normalizeServerModels(await response.json()))
-      requestedModel = activeDefaultModel
+      requestedModel = ai().activeModel
     } catch {
       // The completion request below reports the engine failure when discovery fails.
     }
   }
-  const candidates = Array.from(new Set([requestedModel, DEFAULT_MODEL, FALLBACK_MODEL].filter(Boolean)))
+  const candidates = Array.from(new Set([requestedModel, ai().defaultModel, ai().fallbackModel].filter((value): value is string => Boolean(value))))
   let lastResponse: Response | null = null
   let lastError: unknown = null
   const deadline = Date.now() + timeoutMs
@@ -995,7 +964,7 @@ async function fetchLlmChatCompletions(
       const { signal, cleanup } = createTimeoutSignal(options.signal, remainingMs)
       let retainCleanupUntilBodyConsumed = false
       try {
-        const response = await INFERENCE_TRANSPORT.chat({
+        const response = await ai().transport.chat({
           model: candidateModel,
           messages,
           stream: options.stream,
@@ -1077,17 +1046,17 @@ function cosineSimilarity(left: readonly number[], right: readonly number[]): nu
 }
 
 async function fetchLocalEmbeddings(inputs: string[], signal: AbortSignal): Promise<number[][]> {
-  if (!EMBEDDING_MODEL || inputs.length === 0) return []
+  if (!ai().embeddingModel || inputs.length === 0) return []
   const timed = createTimeoutSignal(signal, 12_000)
   try {
     const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' }
-    if (LLM_API_KEY) headers.Authorization = `Bearer ${LLM_API_KEY}`
-    const response = await fetch(`${LLM_URL}/v1/embeddings`, {
+    if (ai().apiKey) headers.Authorization = `Bearer ${ai().apiKey}`
+    const response = await fetch(`${ai().url}/v1/embeddings`, {
       method: 'POST',
       redirect: LOCAL_INFERENCE_REDIRECT_POLICY,
       signal: timed.signal,
       headers,
-      body: JSON.stringify({ model: EMBEDDING_MODEL, input: inputs }),
+      body: JSON.stringify({ model: ai().embeddingModel, input: inputs }),
     })
     if (!response.ok) return []
     const payload = await response.json() as {
@@ -1113,11 +1082,11 @@ async function rerankLocalEvidenceWithEmbeddings(
   candidates: KnowledgeSearchResult[],
   signal: AbortSignal
 ): Promise<{ results: KnowledgeSearchResult[]; mode: 'embedding-rerank' | 'keyword'; warning?: string }> {
-  if (!EMBEDDING_MODEL || candidates.length < 2) {
+  if (!ai().embeddingModel || candidates.length < 2) {
     return {
       results: candidates,
       mode: 'keyword',
-      ...(!EMBEDDING_MODEL ? { warning: 'No local embedding model is configured.' } : {}),
+      ...(!ai().embeddingModel ? { warning: 'No local embedding model is configured.' } : {}),
     }
   }
   try {
@@ -3538,6 +3507,7 @@ async function fetchSearchResults(
       const response = await fetch(url, {
         signal: timed.signal,
         headers: { Accept: 'application/json' },
+        redirect: 'error',
       })
       lastStatus = response.status
       if (response.ok) {
@@ -4075,13 +4045,13 @@ app.get('/api/health', async (c) => {
     const startedAt = Date.now()
     try {
       const headers: Record<string, string> = { Accept: 'application/json' }
-      if (LLM_API_KEY && inference) {
-        headers.Authorization = `Bearer ${LLM_API_KEY}`
+      if (ai().apiKey && inference) {
+        headers.Authorization = `Bearer ${ai().apiKey}`
       }
       const response = await fetch(url, {
         signal: AbortSignal.timeout(2500),
         headers,
-        redirect: inference ? LOCAL_INFERENCE_REDIRECT_POLICY : 'follow',
+        redirect: LOCAL_INFERENCE_REDIRECT_POLICY,
       })
       return { ok: response.ok, latencyMs: Date.now() - startedAt, response }
     } catch {
@@ -4092,20 +4062,20 @@ app.get('/api/health', async (c) => {
   const checkInferenceModels = async () => {
     const startedAt = Date.now()
     try {
-      const response = await INFERENCE_TRANSPORT.models(AbortSignal.timeout(2500))
+      const response = await ai().transport.models(AbortSignal.timeout(2500))
       return { ok: response.ok, latencyMs: Date.now() - startedAt, response }
     } catch {
       return { ok: false, latencyMs: Date.now() - startedAt, response: null }
     }
   }
 
-  const activeSlotsPath = INFERENCE_TRANSPORT.adapter.optionalSlotsPath
+  const activeSlotsPath = ai().transport.adapter.optionalSlotsPath
 
   const [searxngCheck, llmCheck, slotsCheck, databaseCheck] = await Promise.all([
     checkFetch(`${SEARXNG_URL}/healthz`),
     checkInferenceModels(),
     activeSlotsPath
-      ? checkFetch(`${LLM_URL}${activeSlotsPath}`, true)
+      ? checkFetch(`${ai().url}${activeSlotsPath}`, true)
       : Promise.resolve({ ok: false, latencyMs: 0, response: null }),
     pingDatabase().then((ok) => ({ ok })).catch(() => ({ ok: false })),
     ensureKnowledgeLoaded().catch(() => undefined),
@@ -4117,7 +4087,7 @@ app.get('/api/health', async (c) => {
     ? await getBrowserHistoryStatus().catch(() => null)
     : null
   if (databaseCheck.ok) maybeScheduleDatabaseMaintenance()
-  let modelCount = knownModels.length
+  let modelCount = ai().models.length
   if (llmCheck.response) {
     try {
       const models = normalizeServerModels(await llmCheck.response.json())
@@ -4186,10 +4156,12 @@ app.get('/api/health', async (c) => {
     latencyMs: { searxng: searxngCheck.latencyMs, llm: llmCheck.latencyMs },
     slots,
     modelCount,
-    activeModel: activeDefaultModel,
+    activeModel: ai().activeModel,
     searxngUrl: SEARXNG_URL,
     // Expose only the origin; a configured gateway path may itself be sensitive.
-    llmUrl: new URL(LLM_URL).origin,
+    llmUrl: ai().url,
+    aiConnectionId: ai().id,
+    aiConnectionName: ai().name,
     databasePath,
     persistence: 'sqlite-wal',
     uptimeSeconds: Math.round(process.uptime()),
@@ -4225,54 +4197,100 @@ app.post('/api/diagnostics/database/run', async (c) => {
   return c.json({ action, diagnostics })
 })
 
+app.get('/api/ai/connections', (c) => c.json(aiConnections.list()))
+
+app.post('/api/ai/connections', async (c) => {
+  const body = await c.req.json() as Partial<AiConnectionConfig>
+  try {
+    const id = typeof body.id === 'string' ? body.id : crypto.randomUUID()
+    const existing = aiConnections.get(id)
+    aiConnections.save({ id, name: body.name ?? '', url: body.url ?? '', provider: body.provider ?? 'auto',
+      apiKey: body.apiKey === undefined && body.url === existing?.url ? existing?.apiKey : body.apiKey,
+      defaultModel: body.defaultModel, fallbackModel: body.fallbackModel, embeddingModel: body.embeddingModel })
+    return c.json(aiConnections.list())
+  } catch (error) { return c.json({ error: error instanceof Error ? error.message : 'Could not save AI connection.' }, 400) }
+})
+
+app.post('/api/ai/connections/select', async (c) => {
+  const body = await c.req.json() as { id?: string }
+  try { aiConnections.select(body.id || ''); return c.json(aiConnections.list()) }
+  catch (error) { return c.json({ error: error instanceof Error ? error.message : 'Could not select AI connection.' }, 400) }
+})
+
+app.delete('/api/ai/connections/:id', (c) => {
+  try { aiConnections.remove(c.req.param('id')); return c.json(aiConnections.list()) }
+  catch (error) { return c.json({ error: error instanceof Error ? error.message : 'Could not remove AI connection.' }, 400) }
+})
+
+app.post('/api/ai/discover', async (c) => {
+  // Probe only named/configured model APIs. Never scan the LAN or internal model-worker ports.
+  const results = await Promise.all(aiConnections.list().connections.map(async (description) => {
+    const connection = aiConnections.get(description.id)!
+    try {
+      const response = await connection.transport.models(AbortSignal.timeout(3000))
+      if (!response.ok) return { ...description, available: false, status: response.status }
+      const models = normalizeServerModels(await response.json())
+      connection.models = models
+      return { ...description, available: true, modelCount: models.length }
+    } catch { return { ...description, available: false } }
+  }))
+  return c.json({ activeId: aiConnections.list().activeId, connections: results })
+})
+
 app.get('/api/models', async (c) => {
   try {
-    const response = await INFERENCE_TRANSPORT.models(AbortSignal.timeout(4000))
+    const response = await ai().transport.models(AbortSignal.timeout(4000))
     if (!response.ok) {
-      return c.json({ models: knownModels, activeModel: activeDefaultModel, error: 'Could not reach the local inference server' })
+      return c.json({ connection: describeAiConnection(ai()), models: ai().models, activeModel: ai().activeModel, error: 'Could not reach the selected AI endpoint' })
     }
     const models = normalizeServerModels(await response.json())
     adoptServerModels(models)
     return c.json({
-      models: knownModels,
-      activeModel: activeDefaultModel,
-      configuredDefault: DEFAULT_MODEL,
-      configuredFallback: FALLBACK_MODEL,
+      connection: describeAiConnection(ai()),
+      connectionId: ai().id,
+      models: ai().models,
+      activeModel: ai().activeModel,
+      configuredDefault: ai().defaultModel || '',
+      configuredFallback: ai().fallbackModel || '',
     })
   } catch (error) {
     return c.json({
-      models: knownModels,
-      activeModel: activeDefaultModel,
-      configuredDefault: DEFAULT_MODEL,
-      configuredFallback: FALLBACK_MODEL,
-      error: isAbortError(error) ? 'Request timeout' : 'Failed to fetch models from the local inference server',
+      connection: describeAiConnection(ai()),
+      connectionId: ai().id,
+      models: ai().models,
+      activeModel: ai().activeModel,
+      configuredDefault: ai().defaultModel || '',
+      configuredFallback: ai().fallbackModel || '',
+      error: isAbortError(error) ? 'Request timeout' : 'Failed to fetch models from the selected AI endpoint',
     })
   }
 })
 
 app.post('/api/models/select', async (c) => {
-  const body = (await c.req.json()) as { model?: string }
+  const body = (await c.req.json()) as { model?: string; connectionId?: string }
+  if (body.connectionId && body.connectionId !== ai().id) return c.json({ error: 'AI endpoint changed. Refresh its model list.' }, 409)
   const requested = normalizeModel(body.model)
-  if (typeof body.model !== 'string' || !body.model.trim()) return c.json({ error: 'model required', activeModel: activeDefaultModel }, 400)
+  if (typeof body.model !== 'string' || !body.model.trim()) return c.json({ error: 'model required', activeModel: ai().activeModel }, 400)
 
-  let matching = findAdvertisedModel(knownModels, requested)
+  let matching = findAdvertisedModel(ai().models, requested)
   if (!matching) {
     try {
-      const response = await INFERENCE_TRANSPORT.models(AbortSignal.timeout(4000))
+      const response = await ai().transport.models(AbortSignal.timeout(4000))
       if (response.ok) {
         const models = normalizeServerModels(await response.json())
-        if (models.length > 0) knownModels = models
-        matching = findAdvertisedModel(knownModels, requested)
+        if (models.length > 0) ai().models = models
+        matching = findAdvertisedModel(ai().models, requested)
       }
     } catch {
       // Keep the last-known model catalog during a temporary server outage.
     }
   }
   if (!matching) {
-    return c.json({ error: 'model is not advertised by the local inference server', activeModel: activeDefaultModel }, 400)
+    return c.json({ error: 'model is not advertised by the selected AI endpoint', activeModel: ai().activeModel }, 400)
   }
-  activeDefaultModel = matching.id
-  return c.json({ success: true, activeModel: activeDefaultModel })
+  ai().activeModel = matching.id
+  aiConnections.saveModel()
+  return c.json({ success: true, activeModel: ai().activeModel })
 })
 
 app.get('/api/history', async (c) => {
@@ -4458,13 +4476,12 @@ app.get('/api/browser-history/status', async (c) => {
 
 app.post('/api/browser-history/import', async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { paths?: unknown }
+  if (!Array.isArray(body.paths) || body.paths.length === 0 || body.paths.some(path => typeof path !== 'string')) {
+    return c.json({ error: 'Select at least one browser profile to import.' }, 400)
+  }
+  const requestedPaths = new Set(body.paths as string[])
   const discovered = await discoverBrowserHistorySources()
-  const requestedPaths = Array.isArray(body.paths)
-    ? new Set(body.paths.filter((value): value is string => typeof value === 'string'))
-    : null
-  const selected = requestedPaths
-    ? discovered.filter((source) => requestedPaths.has(source.path))
-    : discovered
+  const selected = discovered.filter((source) => requestedPaths.has(source.path))
   if (selected.length === 0) {
     return c.json({ error: 'No supported Chrome, Edge, Brave, Chromium, or Firefox history database was found.' }, 404)
   }
@@ -5126,7 +5143,7 @@ app.post('/api/chat/conversation', async (c) => {
   const messages = sanitizeConversationMessages(body.messages)
   if (messages.length === 0) return c.json({ error: 'messages required' }, 400)
   const requestId = durableRequestId(body.requestId)
-  const targetModel = normalizeModel(body.model || activeDefaultModel)
+  const targetModel = normalizeModel(body.model || ai().activeModel)
   const generationPolicy = modelGenerationPolicy(targetModel)
   const query = messages[messages.length - 1]?.content ?? ''
   const focus = normalizeFocus(body.focus)
@@ -5144,7 +5161,7 @@ app.post('/api/chat/conversation', async (c) => {
   const journeyContext = formatJourneyContext(body.journeyContext)
   const systemMessage = {
     role: 'system' as const,
-    content: `You are KeepIndex, an ultra-fast private local AI assistant.
+    content: `You are KeepIndex, a personal search assistant using the selected AI endpoint.
 Be concise, accurate, clear, and engaging.
 Prefer grounded answers. If unsure or missing information, state uncertainty explicitly.
 This conversation has no automatic web evidence; never imply that an uncited factual claim was searched or verified.
@@ -5282,10 +5299,10 @@ app.post('/api/related', async (c) => {
   const body = (await c.req.json()) as { query?: unknown; answer?: unknown; model?: unknown }
   const query = normalizeIncomingQuery(body.query)
   const answer = typeof body.answer === 'string' ? body.answer.trim() : ''
-  const targetModel = normalizeModel(body.model || activeDefaultModel)
+  const targetModel = normalizeModel(body.model || ai().activeModel)
   if (answer.length < MIN_RELATED_INPUT_CHARS) return c.json({ status: 'skipped', questions: [] })
   if (!query || !answer) return c.json({ status: 'unavailable', questions: [] }, 400)
-  const cacheKey = `related:${targetModel}::${query.toLowerCase()}::${truncateText(answer.toLowerCase(), 2400)}`
+  const cacheKey = `related:${ai().id}:${targetModel}::${query.toLowerCase()}::${truncateText(answer.toLowerCase(), 2400)}`
   const cached = getCachedValue(relatedQuestionsCache, cacheKey)
   if (cached) return c.json({ status: 'ok', questions: cached })
 
@@ -5459,7 +5476,7 @@ app.on('POST', ['/api/chat', '/api/ask'], async (c) => {
     const retrievalQuery = normalizeIncomingQuery(body.retrievalQuery) || query
     const focus = normalizeFocus(body.focus)
     const requestId = durableRequestId(body.requestId)
-    const targetModel = normalizeModel(body.model || activeDefaultModel)
+    const targetModel = normalizeModel(body.model || ai().activeModel)
     const searchTarget = normalizeSearchTarget(body.target)
     const generationPolicy = modelGenerationPolicy(targetModel)
     if (!query) return c.json({ error: 'query required' }, 400)
@@ -5566,7 +5583,7 @@ app.on('POST', ['/api/chat', '/api/ask'], async (c) => {
 
     const finishEmbeddingRerank = executionTrace.start('embedding_rerank', {
       requested: allowLocal && body.semantic === true,
-      model: EMBEDDING_MODEL || null,
+      model: ai().embeddingModel || null,
       candidates: localCandidates.length,
     })
     if (allowLocal && body.semantic === true) {
@@ -6264,10 +6281,10 @@ app.post('/api/takeaways', async (c) => {
   const startedAt = Date.now()
   const body = (await c.req.json()) as { answer?: unknown; model?: unknown }
   const answer = typeof body.answer === 'string' ? body.answer.trim() : ''
-  const targetModel = normalizeModel(body.model || activeDefaultModel)
+  const targetModel = normalizeModel(body.model || ai().activeModel)
   if (answer.length < MIN_TAKEAWAY_INPUT_CHARS) return c.json({ status: 'skipped', takeaways: [] })
   if (!answer) return c.json({ status: 'unavailable', takeaways: [] }, 400)
-  const cacheKey = `takeaways:${targetModel}::${truncateText(answer.toLowerCase(), 5000)}`
+  const cacheKey = `takeaways:${ai().id}:${targetModel}::${truncateText(answer.toLowerCase(), 5000)}`
   const cached = getCachedValue(takeawaysCache, cacheKey)
   if (cached) return c.json({ status: 'ok', takeaways: cached })
   const systemPrompt = `Extract key takeaways from this text.
@@ -6346,7 +6363,7 @@ app.post('/api/research', async (c) => {
   const retrievalQuery = normalizeIncomingQuery(body.retrievalQuery) || query
   const focus = normalizeFocus(body.focus)
   const requestId = durableRequestId(body.requestId)
-  const targetModel = normalizeModel(body.model || activeDefaultModel)
+  const targetModel = normalizeModel(body.model || ai().activeModel)
   const searchTarget = normalizeSearchTarget(body.target)
   const allowWeb = targetIncludesWeb(searchTarget)
   const allowLocal = targetIncludesLocal(searchTarget)

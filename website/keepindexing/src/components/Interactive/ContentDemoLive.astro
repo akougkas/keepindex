@@ -1,1148 +1,385 @@
 ---
+import Heading from "@/components/Typography/Heading.astro";
 interface Props {
   /** Set to `false` to skip rendering this component and its children. */
   render?: boolean;
 }
-
 const { render = true } = Astro.props;
 ---
 
 {
   render && (
-    <div class="demo-live_wrap" id="demo">
-      <div class="demo-live_container">
-        {/* Omnibar Controls */}
-        <div class="demo-live_omnibar">
-          <div class="demo-live_bar_top">
-            <div class="demo-live_modes" role="tablist" aria-label="Search Modes">
-              <button
-                class="demo-live_mode_btn is-active"
-                role="tab"
-                aria-selected="true"
-                data-mode="ask"
-                type="button"
-              >
-                <span class="demo-live_mode_icon">⚡</span>
-                <span>Grounded Answer</span>
-                <span class="demo-live_mode_badge">/api/ask</span>
-              </button>
-              <button
-                class="demo-live_mode_btn"
-                role="tab"
-                aria-selected="false"
-                data-mode="search"
-                type="button"
-              >
-                <span class="demo-live_mode_icon">🔍</span>
-                <span>Federated Search</span>
-                <span class="demo-live_mode_badge">/api/search</span>
-              </button>
-              <button
-                class="demo-live_mode_btn"
-                role="tab"
-                aria-selected="false"
-                data-mode="research"
-                type="button"
-              >
-                <span class="demo-live_mode_icon">🔬</span>
-                <span>Deep Research</span>
-                <span class="demo-live_mode_badge">/api/research</span>
-              </button>
-            </div>
-
-            <div class="demo-live_target_filters">
-              <span class="demo-live_target_label">Target:</span>
-              <span class="demo-live_target_pill is-active" data-target="all">All Sources</span>
-              <span class="demo-live_target_pill" data-target="web">Web</span>
-              <span class="demo-live_target_pill" data-target="vault">Vault</span>
-              <span class="demo-live_target_pill" data-target="docs">Docs</span>
-              <span class="demo-live_target_pill" data-target="history">History</span>
-            </div>
+    <div class="searchdemo_wrap">
+      <div class="searchdemo_top">
+        <>
+          <span>KeepIndex / your workspace</span>
+          <span>Illustrative example · sample data</span>
+        </>
+      </div>
+      <div class="searchdemo_query">
+        <>
+          <span aria-hidden="true">⌕</span>
+          <p>What did I learn about restoring my backups?</p>
+          <span class="searchdemo_scope">This computer</span>
+        </>
+      </div>
+      <div
+        class="searchdemo_tabs"
+        role="tablist"
+        aria-label="Example result mode"
+      >
+        <button
+          type="button"
+          role="tab"
+          id="example-search-tab"
+          aria-controls="example-search"
+          aria-selected="true"
+        >
+          Search
+        </button>
+        <button
+          type="button"
+          role="tab"
+          id="example-answer-tab"
+          aria-controls="example-answer"
+          aria-selected="false"
+          tabindex="-1"
+        >
+          Answer
+        </button>
+        <button
+          type="button"
+          role="tab"
+          id="example-research-tab"
+          aria-controls="example-research"
+          aria-selected="false"
+          tabindex="-1"
+        >
+          Research
+        </button>
+      </div>
+      <div class="searchdemo_body">
+        <div
+          role="tabpanel"
+          id="example-search"
+          aria-labelledby="example-search-tab"
+          tabindex="0"
+        >
+          <div class="searchdemo_result">
+            <>
+              <span class="searchdemo_kind">VAULT · Markdown</span>
+              <Heading tag="h3" variant="h4">
+                A backup is only useful if I can restore it
+              </Heading>
+              <p>
+                Run a restore drill before relying on a backup. Keep the
+                recovery instructions next to the checklist.
+              </p>
+              <small>notes / backup-drill.md</small>
+            </>
           </div>
-
-          <div class="demo-live_search_box">
-            <div class="demo-live_input_prefix">
-              <span class="demo-live_dot" />
-              <span class="demo-live_prompt_symbol">&gt;</span>
-            </div>
-            <input
-              type="text"
-              class="demo-live_input"
-              value="How should I structure my reverse proxy for my homelab?"
-              placeholder="Ask anything across web, vault, local docs, and history..."
-              aria-label="Search query simulation"
-            />
-            <button class="demo-live_run_btn" type="button" aria-label="Execute search">
-              Run Query ↵
-            </button>
+          <div class="searchdemo_result">
+            <>
+              <span class="searchdemo_kind">FILES · Text</span>
+              <Heading tag="h3" variant="h4">
+                Weekend restore checklist
+              </Heading>
+              <p>
+                Restore into an empty folder. Compare checksums. Record the
+                recovery time.
+              </p>
+              <small>projects / restore-checklist.txt</small>
+            </>
           </div>
-
-          {/* Quick Query Presets */}
-          <div class="demo-live_presets">
-            <span class="demo-live_presets_title">Try real queries:</span>
-            <button
-              class="demo-live_preset_chip is-active"
-              data-query="How should I structure my reverse proxy for my homelab?"
-              type="button"
-            >
-              Homelab Reverse Proxy (Web + Vault + Config)
-            </button>
-            <button
-              class="demo-live_preset_chip"
-              data-query="BM25 ranking vs vector rerank in local SQLite"
-              type="button"
-            >
-              BM25 vs Vector Rerank (Local Code + Paper)
-            </button>
-            <button
-              class="demo-live_preset_chip"
-              data-query="Compare zero-trust mesh options for a 3-node homelab"
-              type="button"
-            >
-              Zero-Trust Mesh Comparison (Research mode)
-            </button>
-          </div>
-        </div>
-
-        {/* Live Workspace Area */}
-        <div class="demo-live_workspace">
-          {/* Query Vitals Bar */}
-          <div class="demo-live_vitals">
-            <div class="demo-live_vitals_item">
-              <span class="demo-live_vital_label">INFERENCE:</span>
-              <span class="demo-live_vital_val green">llama.cpp (Qwen2.5-7B) @ 127.0.0.1:8080</span>
-            </div>
-            <div class="demo-live_vitals_item">
-              <span class="demo-live_vital_label">LATENCY:</span>
-              <span class="demo-live_vital_val">1.18s (prefill 210 t/s)</span>
-            </div>
-            <div class="demo-live_vitals_item">
-              <span class="demo-live_vital_label">GROUNDING COVERAGE:</span>
-              <span class="demo-live_vital_val green" id="vital-coverage">96% (&ge; 80% REQUIRED)</span>
-            </div>
-            <div class="demo-live_vitals_item">
-              <span class="demo-live_vital_label">PERSISTENCE:</span>
-              <span class="demo-live_vital_val">SQLite WAL #d72f91a</span>
-            </div>
-          </div>
-
-          {/* Mode 1: Grounded Answer View */}
-          <div class="demo-live_view is-active" id="view-ask">
-            <div class="demo-live_answer_card">
-              <div class="demo-live_answer_header">
-                <div class="demo-live_badge_row">
-                  <span class="demo-live_status_badge verified" id="gate-status-badge">
-                    ✓ GROUNDING GATE VERIFIED
-                  </span>
-                  <span class="demo-live_source_count">4 Sources Admitted</span>
-                </div>
-                <button class="demo-live_tamper_btn" id="btn-tamper" type="button">
-                  <span>⚡ Test Hallucination Intercept</span>
-                </button>
-              </div>
-
-              <div class="demo-live_answer_body" id="answer-content">
-                <p>
-                  To structure your homelab reverse proxy securely, terminate public ingress at the web edge via Cloudflare Tunnel or local Traefik <button class="demo-live_cite" data-cite="1">[1]</button>, and restrict host listeners to loopback (<code>127.0.0.1</code>) and internal Tailscale interfaces (<code>100.64.0.0/10</code>) <button class="demo-live_cite" data-cite="2">[2]</button>.
-                </p>
-                <p>
-                  In Docker environments, place containers on an isolated bridge network (e.g., <code>web</code>) and route exclusively via dynamic Traefik container labels, preventing published port exposure to untrusted LAN segments <button class="demo-live_cite" data-cite="3">[3]</button>. Keep public and private services strictly compartmentalized, using separate host binds for internal dashboards like Portainer or SearXNG <button class="demo-live_cite" data-cite="4">[4]</button>.
-                </p>
-              </div>
-
-              <div class="demo-live_tamper_notice" id="tamper-alert" hidden>
-                <div class="demo-live_tamper_icon">🛑</div>
-                <div class="demo-live_tamper_text">
-                  <strong>FAIL-CLOSED GATE TRIGGERED: <code>status: no_evidence</code></strong>
-                  <span>Sentence 2 introduced an out-of-pack assertion with no resolved local citation. Coverage dropped to 54% (below the 80% threshold). KeepIndex quarantined this response rather than presenting hallucinations as facts.</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Evidence Pack Drawer / Cards */}
-            <div class="demo-live_evidence_section">
-              <div class="demo-live_evidence_heading">
-                <span>ADMITTED EVIDENCE PACK (CLICK CITATION TO INSPECT)</span>
-                <span class="demo-live_containment_badge">LOCAL BOUNDARY ENFORCED</span>
-              </div>
-              <div class="demo-live_evidence_grid">
-                <div class="demo-live_evidence_card" data-source-id="1">
-                  <div class="demo-live_evidence_header">
-                    <span class="demo-live_cite_num">[1]</span>
-                    <span class="demo-live_evidence_type web">SearXNG Web</span>
-                    <span class="demo-live_evidence_host">doc.traefik.io</span>
-                  </div>
-                  <div class="demo-live_evidence_title">Traefik Docker Dynamic Routing &amp; Ingress</div>
-                  <div class="demo-live_evidence_snippet">
-                    "Traefik listens on Docker socket events to register dynamic HTTP routers. Containers on the shared network are discovered without publishing host ports."
-                  </div>
-                  <div class="demo-live_evidence_meta">BM25: 18.4 · Recency: 0.88 · Diversity rank: 1</div>
-                </div>
-
-                <div class="demo-live_evidence_card" data-source-id="2">
-                  <div class="demo-live_evidence_header">
-                    <span class="demo-live_cite_num">[2]</span>
-                    <span class="demo-live_evidence_type vault">Obsidian Vault</span>
-                    <span class="demo-live_evidence_host">vault/homelab/proxy.md</span>
-                  </div>
-                  <div class="demo-live_evidence_title">Homelab Network Topology &amp; Tailscale Ingress</div>
-                  <div class="demo-live_evidence_snippet">
-                    "Private admin dashboards must bind exclusively to Tailscale 100.64.0.0/10. Do not publish port 8080 or Portainer 9443 to the LAN gateway."
-                  </div>
-                  <div class="demo-live_evidence_meta">Tags: #homelab #networking #security · Wikilinks: 4</div>
-                </div>
-
-                <div class="demo-live_evidence_card" data-source-id="3">
-                  <div class="demo-live_evidence_header">
-                    <span class="demo-live_cite_num">[3]</span>
-                    <span class="demo-live_evidence_type docs">Local Config</span>
-                    <span class="demo-live_evidence_host">~/webhosting/infra/compose.yml</span>
-                  </div>
-                  <div class="demo-live_evidence_title">Traefik Gateway Compose &amp; UFW Rules</div>
-                  <div class="demo-live_evidence_snippet">
-                    "networks: web: external: true. Services attach with traefik.enable=true and traefik.http.routers.name.rule=Host(...) without exposed host ports."
-                  </div>
-                  <div class="demo-live_evidence_meta">Extracted text · Containment check: pass</div>
-                </div>
-
-                <div class="demo-live_evidence_card" data-source-id="4">
-                  <div class="demo-live_evidence_header">
-                    <span class="demo-live_cite_num">[4]</span>
-                    <span class="demo-live_evidence_type history">Browser Memory</span>
-                    <span class="demo-live_evidence_host">Firefox History</span>
-                  </div>
-                  <div class="demo-live_evidence_title">Cloudflare Zero Trust Tunnels Documentation</div>
-                  <div class="demo-live_evidence_snippet">
-                    "Visited 6 times · stripped OAuth fragments and query session keys · sanitized URL only: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/"
-                  </div>
-                  <div class="demo-live_evidence_meta">FTS5 match · Zero body retention</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Mode 2: Federated Search View */}
-          <div class="demo-live_view" id="view-search">
-            <div class="demo-live_search_results">
-              <div class="demo-live_search_row">
-                <span class="demo-live_source_indicator vault">Obsidian Vault</span>
-                <div class="demo-live_search_info">
-                  <a href="#demo" class="demo-live_search_title">BM25 Ranking and Lexical Scoring in SQLite FTS5</a>
-                  <p class="demo-live_search_snippet">
-                    Extracted from <code>vault/algorithms/information-retrieval.md</code>: Detailed notes on BM25 parameters k1=1.2, b=0.75 and how SQLite's matchinfo() / fts5 auxiliary functions calculate term frequency across document chunks.
-                  </p>
-                  <span class="demo-live_search_meta">Score: 0.94 · 1,420 words · Last indexed: 2 hours ago</span>
-                </div>
-              </div>
-
-              <div class="demo-live_search_row">
-                <span class="demo-live_source_indicator docs">Local Document (PDF)</span>
-                <div class="demo-live_search_info">
-                  <a href="#demo" class="demo-live_search_title">hybrid-search-rerank-systems.pdf (Page 4)</a>
-                  <p class="demo-live_search_snippet">
-                    Extracted via <code>pdftotext</code>: "Comparing reciprocal rank fusion against lexical BM25 baselines on memory-constrained devices shows that BM25 with local embedding reranking recovers 92% of full neural precision."
-                  </p>
-                  <span class="demo-live_search_meta">Score: 0.89 · PDF / Text · Containment verified</span>
-                </div>
-              </div>
-
-              <div class="demo-live_search_row">
-                <span class="demo-live_source_indicator web">SearXNG Web</span>
-                <div class="demo-live_search_info">
-                  <a href="#demo" class="demo-live_search_title">sqlite-vec: A vector search extension for SQLite</a>
-                  <p class="demo-live_search_snippet">
-                    Via local SearXNG meta-search: "sqlite-vec is an extremely fast vector search extension for SQLite, written in C. Zero external dependencies, pure local execution."
-                  </p>
-                  <span class="demo-live_search_meta">Score: 0.81 · Web hit via SearXNG @ 127.0.0.1:8888</span>
-                </div>
-              </div>
-
-              <div class="demo-live_search_row">
-                <span class="demo-live_source_indicator history">Private Browser History</span>
-                <div class="demo-live_search_info">
-                  <a href="#demo" class="demo-live_search_title">GitHub - asg017/sqlite-vec: Work-in-progress vector search SQLite extension</a>
-                  <p class="demo-live_search_snippet">
-                    Privately discovered in Chromium profile: Visited 14 times. Credential query params stripped before storage.
-                  </p>
-                  <span class="demo-live_search_meta">Score: 0.74 · Local FTS5 metadata</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Mode 3: Deep Research View */}
-          <div class="demo-live_view" id="view-research">
-            <div class="demo-live_research_layout">
-              <div class="demo-live_research_steps">
-                <div class="demo-live_rstep complete">
-                  <span class="demo-live_rnum">01</span>
-                  <div class="demo-live_rinfo">
-                    <strong>Query Decomposition &amp; Planning</strong>
-                    <span>Decomposed into 3 targeted sub-queries across local vault &amp; SearXNG</span>
-                  </div>
-                </div>
-                <div class="demo-live_rstep complete">
-                  <span class="demo-live_rnum">02</span>
-                  <div class="demo-live_rinfo">
-                    <strong>Evidence Lattice Assembly</strong>
-                    <span>Retrieved 18 candidate chunks · 6 admitted to bounded evidence pack</span>
-                  </div>
-                </div>
-                <div class="demo-live_rstep active">
-                  <span class="demo-live_rnum">03</span>
-                  <div class="demo-live_rinfo">
-                    <strong>Recursive Synthesis &amp; Citation Gate</strong>
-                    <span>Resolving claims against local evidence pack · Coverage checking</span>
-                  </div>
-                </div>
-              </div>
-
-              <div class="demo-live_research_synthesis">
-                <div class="demo-live_research_header">
-                  <strong>Deep Research Report: Zero-Trust Homelab Architecture</strong>
-                  <span class="demo-live_tag">Synthesized locally</span>
-                </div>
-                <div class="demo-live_research_body">
-                  <h4>1. WireGuard Mesh vs Tailscale Headscale</h4>
-                  <p>
-                    For a multi-node cluster, <strong>Tailscale</strong> offers zero-config NAT traversal via DERP relays while preserving end-to-end encryption. In homelabs requiring complete control without third-party authentication dependencies, self-hosted <strong>Headscale</strong> provides sovereign coordination.
-                  </p>
-                  <h4>2. Micro-Segmentation &amp; Container Ingress</h4>
-                  <p>
-                    Segregate ingress proxies from database and inference workers. Bind web hosting proxies (Traefik/Nginx) to port 80/443 on an external Docker network, and restrict database containers (PostgreSQL/VectorChord) to internal loopback networks.
-                  </p>
-                </div>
-              </div>
-            </div>
+          <div class="searchdemo_result">
+            <>
+              <span class="searchdemo_kind">HISTORY · Visited page</span>
+              <Heading tag="h3" variant="h4">
+                Restoring from a backup — restic documentation
+              </Heading>
+              <p>
+                A page you visited about restoring snapshots and choosing a
+                destination.
+              </p>
+              <small>restic.readthedocs.io · title and visit metadata</small>
+            </>
           </div>
         </div>
+        <div
+          role="tabpanel"
+          id="example-answer"
+          aria-labelledby="example-answer-tab"
+          tabindex="0"
+          hidden
+        >
+          <>
+            <span class="searchdemo_kind">ANSWER · Local model example</span>
+            <Heading tag="h3" variant="h3">
+              Practice the recovery, too.
+            </Heading>
+          </>
+          <p>
+            Your notes emphasize testing a restore before you rely on a backup.
+            Keep the recovery steps beside the checklist.{" "}
+            <a href="#example-source-one">[L1]</a>
+          </p>
+          <p>
+            Your checklist adds three concrete steps: restore into an empty
+            folder, compare checksums, and record how long it takes.{" "}
+            <a href="#example-source-two">[L2]</a>
+          </p>
+          <details id="example-source-one">
+            <>
+              <summary>[L1] Inspect the note</summary>
+              <blockquote>
+                “Run a restore drill before relying on a backup. Keep the
+                recovery instructions next to the checklist.”
+              </blockquote>
+              <small>Sample source: notes / backup-drill.md</small>
+            </>
+          </details>
+          <details id="example-source-two">
+            <>
+              <summary>[L2] Inspect the checklist</summary>
+              <blockquote>
+                “Restore into an empty folder. Compare checksums. Record the
+                recovery time.”
+              </blockquote>
+              <small>Sample source: projects / restore-checklist.txt</small>
+            </>
+          </details>
+        </div>
+        <div
+          role="tabpanel"
+          id="example-research"
+          aria-labelledby="example-research-tab"
+          tabindex="0"
+          hidden
+        >
+          <>
+            <span class="searchdemo_kind">
+              RESEARCH · Example investigation
+            </span>
+            <Heading tag="h3" variant="h3">
+              Turn scattered notes into a plan.
+            </Heading>
+          </>
+          <ol>
+            <>
+              <li>
+                <strong>Find the advice.</strong> Read your backup drill note
+                and restore checklist.
+              </li>
+              <li>
+                <strong>Compare the steps.</strong> Connect recovery
+                instructions with the checksum and timing checks.
+              </li>
+              <li>
+                <strong>Identify the gap.</strong> These example notes contain
+                no measured recovery time. Run a drill before estimating one.
+              </li>
+            </>
+          </ol>
+          <p class="searchdemo_caveat">
+            Real results depend on your sources and model. Citations help you
+            inspect an answer; they do not guarantee it is correct.
+          </p>
+        </div>
+      </div>
+      <div class="searchdemo_bottom">
+        This example runs entirely in this page. It does not access your files,
+        history, or local KeepIndex installation.
       </div>
     </div>
   )
 }
-
 <script>
-  // Interactive Demo Script
-  const root = document.getElementById("demo");
-  if (root) {
-    // Mode Switching
-    const modeBtns = root.querySelectorAll<HTMLButtonElement>(".demo-live_mode_btn");
-    const views = {
-      ask: root.querySelector<HTMLElement>("#view-ask"),
-      search: root.querySelector<HTMLElement>("#view-search"),
-      research: root.querySelector<HTMLElement>("#view-research"),
+  document.querySelectorAll<HTMLElement>(".searchdemo_wrap").forEach((root) => {
+    const tabs = Array.from(
+      root.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+    );
+    const select = (tab: HTMLButtonElement) => {
+      tabs.forEach((item) => {
+        const active = item === tab;
+        item.setAttribute("aria-selected", String(active));
+        item.tabIndex = active ? 0 : -1;
+      });
+      root
+        .querySelectorAll<HTMLElement>('[role="tabpanel"]')
+        .forEach((panel) => {
+          panel.hidden = panel.id !== tab.getAttribute("aria-controls");
+        });
     };
-
-    modeBtns.forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const mode = btn.dataset.mode as keyof typeof views;
-        modeBtns.forEach((b) => {
-          b.classList.remove("is-active");
-          b.setAttribute("aria-selected", "false");
-        });
-        btn.classList.add("is-active");
-        btn.setAttribute("aria-selected", "true");
-
-        Object.values(views).forEach((v) => v?.classList.remove("is-active"));
-        views[mode]?.classList.add("is-active");
-      });
-    });
-
-    // Preset Queries
-    const input = root.querySelector<HTMLInputElement>(".demo-live_input");
-    const presetChips = root.querySelectorAll<HTMLButtonElement>(".demo-live_preset_chip");
-
-    presetChips.forEach((chip) => {
-      chip.addEventListener("click", () => {
-        presetChips.forEach((c) => c.classList.remove("is-active"));
-        chip.classList.add("is-active");
-        const query = chip.dataset.query;
-        if (input && query) {
-          input.value = query;
-          if (query.includes("Zero-Trust")) {
-            // Trigger research tab
-            root.querySelector<HTMLButtonElement>('[data-mode="research"]')?.click();
-          } else if (query.includes("BM25")) {
-            root.querySelector<HTMLButtonElement>('[data-mode="search"]')?.click();
-          } else {
-            root.querySelector<HTMLButtonElement>('[data-mode="ask"]')?.click();
-          }
+    tabs.forEach((tab, index) => {
+      tab.addEventListener("click", () => select(tab));
+      tab.addEventListener("keydown", (event) => {
+        if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key))
+          return;
+        event.preventDefault();
+        const next =
+          event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? tabs.length - 1
+              : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) %
+                tabs.length;
+        const target = tabs[next];
+        if (target) {
+          select(target);
+          target.focus();
         }
       });
     });
-
-    // Citation Highlighting
-    const citeBtns = root.querySelectorAll<HTMLButtonElement>(".demo-live_cite");
-    const evidenceCards = root.querySelectorAll<HTMLElement>(".demo-live_evidence_card");
-
-    citeBtns.forEach((cite) => {
-      cite.addEventListener("click", () => {
-        const id = cite.dataset.cite;
-        evidenceCards.forEach((card) => {
-          if (card.dataset.sourceId === id) {
-            card.classList.add("highlighted");
-            card.scrollIntoView({ behavior: "smooth", block: "nearest" });
-          } else {
-            card.classList.remove("highlighted");
-          }
-        });
-      });
-    });
-
-    // Hallucination Tamper Test
-    const tamperBtn = root.querySelector<HTMLButtonElement>("#btn-tamper");
-    const answerContent = root.querySelector<HTMLElement>("#answer-content");
-    const tamperAlert = root.querySelector<HTMLElement>("#tamper-alert");
-    const gateBadge = root.querySelector<HTMLElement>("#gate-status-badge");
-    const vitalCoverage = root.querySelector<HTMLElement>("#vital-coverage");
-
-    let isTampered = false;
-
-    tamperBtn?.addEventListener("click", () => {
-      isTampered = !isTampered;
-      if (isTampered) {
-        tamperBtn.classList.add("active");
-        tamperBtn.innerHTML = "<span>↩ Restore Verified Evidence</span>";
-        if (answerContent) {
-          answerContent.style.opacity = "0.35";
-        }
-        if (tamperAlert) tamperAlert.hidden = false;
-        if (gateBadge) {
-          gateBadge.className = "demo-live_status_badge rejected";
-          gateBadge.textContent = "✕ REJECTED: COVERAGE 54% (FAIL-CLOSED)";
-        }
-        if (vitalCoverage) {
-          vitalCoverage.className = "demo-live_vital_val red";
-          vitalCoverage.textContent = "54% (FAILED GATE: NO_EVIDENCE)";
-        }
-      } else {
-        tamperBtn.classList.remove("active");
-        tamperBtn.innerHTML = "<span>⚡ Test Hallucination Intercept</span>";
-        if (answerContent) {
-          answerContent.style.opacity = "1";
-        }
-        if (tamperAlert) tamperAlert.hidden = true;
-        if (gateBadge) {
-          gateBadge.className = "demo-live_status_badge verified";
-          gateBadge.textContent = "✓ GROUNDING GATE VERIFIED";
-        }
-        if (vitalCoverage) {
-          vitalCoverage.className = "demo-live_vital_val green";
-          vitalCoverage.textContent = "96% (≥ 80% REQUIRED)";
-        }
-      }
-    });
-  }
+    root
+      .querySelectorAll<HTMLAnchorElement>('a[href^="#example-source-"]')
+      .forEach((link) =>
+        link.addEventListener("click", () => {
+          const detail = root.querySelector<HTMLDetailsElement>(
+            link.getAttribute("href")!,
+          );
+          if (detail) detail.open = true;
+        }),
+      );
+  });
 </script>
-
 <style is:global>
   @layer components {
-    .demo-live_wrap {
+    .searchdemo_wrap {
       width: 100%;
-      margin-block: var(--space-6);
-    }
-
-    .demo-live_container {
-      background-color: var(--dark-900);
-      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 16%, transparent);
-      border-radius: var(--radius-main);
+      background: #fcfaf3;
+      color: #13211a;
+      border: 0.0625rem solid #c7c9b9;
+      border-radius: 0.75rem;
       overflow: hidden;
-      box-shadow: 0 1.5rem 3rem rgba(0, 0, 0, 0.4);
-    }
-
-    /* Omnibar */
-    .demo-live_omnibar {
-      background-color: var(--dark-800);
-      border-bottom: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 12%, transparent);
-      padding: var(--space-4);
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-3);
-    }
-
-    .demo-live_bar_top {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-      gap: var(--space-3);
-    }
-
-    .demo-live_modes {
-      display: flex;
-      gap: var(--space-2);
-      background-color: var(--dark-900);
-      padding: 0.25rem;
-      border-radius: var(--radius-small);
-      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 10%, transparent);
-    }
-
-    .demo-live_mode_btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.375rem;
-      padding: 0.4rem 0.75rem;
-      border-radius: calc(var(--radius-small) - 0.125rem);
-      font-size: var(--text-small);
-      font-weight: var(--primary-medium);
-      color: var(--brand-stone);
-      transition: all var(--hover-duration) var(--hover-ease);
-      border: 0;
-      background: transparent;
-
-      &.is-active {
-        background-color: var(--dark-700);
-        color: var(--brand-ivory);
-        box-shadow: 0 0.125rem 0.375rem rgba(0, 0, 0, 0.3);
+      .searchdemo_top,
+      .searchdemo_bottom {
+        padding: 1rem 1.5rem;
+        font-size: 0.7rem;
+        color: #52604e;
+        background: #eeefe4;
       }
-      @media (hover: hover) {
-        &:hover:not(.is-active) {
-          color: var(--brand-ivory);
-        }
-      }
-    }
-
-    .demo-live_mode_icon {
-      font-size: 0.9em;
-    }
-
-    .demo-live_mode_badge {
-      font-family: var(--font-mono);
-      font-size: 0.7rem;
-      background-color: color-mix(in lab, var(--brand-ivory) 8%, transparent);
-      padding: 0.1rem 0.3rem;
-      border-radius: 0.25rem;
-      color: var(--brand-stone);
-    }
-
-    .demo-live_target_filters {
-      display: flex;
-      align-items: center;
-      gap: 0.375rem;
-      font-size: 0.75rem;
-      font-family: var(--font-mono);
-    }
-
-    .demo-live_target_label {
-      color: var(--brand-stone);
-    }
-
-    .demo-live_target_pill {
-      padding: 0.2rem 0.5rem;
-      border-radius: var(--radius-round);
-      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 12%, transparent);
-      color: var(--brand-stone);
-      cursor: pointer;
-      transition: all 0.2s ease;
-
-      &.is-active {
-        border-color: var(--brand-green);
-        color: var(--brand-green);
-        background-color: color-mix(in lab, var(--brand-green) 10%, transparent);
-      }
-    }
-
-    .demo-live_search_box {
-      display: flex;
-      align-items: center;
-      background-color: var(--dark-900);
-      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 20%, transparent);
-      border-radius: var(--radius-small);
-      padding: 0.625rem 1rem;
-      gap: 0.75rem;
-      transition: border-color var(--hover-duration) var(--hover-ease);
-
-      &:focus-within {
-        border-color: var(--brand-green);
-        box-shadow: 0 0 0 0.125rem color-mix(in lab, var(--brand-green) 25%, transparent);
-      }
-    }
-
-    .demo-live_input_prefix {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .demo-live_dot {
-      width: 0.5rem;
-      height: 0.5rem;
-      border-radius: 50%;
-      background-color: var(--brand-green);
-      box-shadow: 0 0 0.5rem var(--brand-green);
-    }
-
-    .demo-live_prompt_symbol {
-      font-family: var(--font-mono);
-      font-weight: 700;
-      color: var(--brand-green);
-    }
-
-    .demo-live_input {
-      flex: 1;
-      background: transparent;
-      border: 0;
-      color: var(--brand-ivory);
-      font-size: 1.05rem;
-      font-family: var(--primary-family);
-      outline: none;
-    }
-
-    .demo-live_run_btn {
-      font-family: var(--font-mono);
-      font-size: 0.8rem;
-      background-color: var(--brand-green);
-      color: var(--brand-ink);
-      padding: 0.4rem 0.8rem;
-      border-radius: var(--radius-small);
-      font-weight: 700;
-      border: 0;
-      transition: all var(--hover-duration) var(--hover-ease);
-      @media (hover: hover) {
-        &:hover {
-          background-color: var(--brand-ivory);
-        }
-      }
-    }
-
-    .demo-live_presets {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .demo-live_presets_title {
-      font-size: 0.75rem;
-      font-family: var(--font-mono);
-      color: var(--brand-stone);
-    }
-
-    .demo-live_preset_chip {
-      background-color: color-mix(in lab, var(--brand-ivory) 6%, transparent);
-      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 10%, transparent);
-      border-radius: var(--radius-small);
-      padding: 0.25rem 0.625rem;
-      font-size: 0.75rem;
-      color: var(--brand-stone);
-      cursor: pointer;
-      transition: all var(--hover-duration) var(--hover-ease);
-
-      &.is-active,
-      &:hover {
-        color: var(--brand-ivory);
-        border-color: color-mix(in lab, var(--brand-green) 40%, transparent);
-        background-color: color-mix(in lab, var(--brand-green) 8%, transparent);
-      }
-    }
-
-    /* Workspace */
-    .demo-live_workspace {
-      padding: var(--space-4);
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-4);
-    }
-
-    .demo-live_vitals {
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--space-4);
-      padding: 0.625rem 1rem;
-      border-radius: var(--radius-small);
-      background-color: color-mix(in lab, var(--brand-ink) 70%, transparent);
-      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 8%, transparent);
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-    }
-
-    .demo-live_vitals_item {
-      display: flex;
-      gap: 0.375rem;
-    }
-
-    .demo-live_vital_label {
-      color: var(--brand-stone);
-    }
-
-    .demo-live_vital_val {
-      color: var(--brand-ivory);
-      &.green {
-        color: var(--brand-green);
-      }
-      &.red {
-        color: #ff5c5c;
-      }
-    }
-
-    .demo-live_view {
-      display: none;
-      &.is-active {
+      .searchdemo_top {
         display: flex;
-        flex-direction: column;
-        gap: var(--space-4);
+        justify-content: space-between;
+        gap: 1rem;
       }
-    }
-
-    /* Answer Card */
-    .demo-live_answer_card {
-      background-color: var(--dark-800);
-      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 14%, transparent);
-      border-radius: var(--radius-small);
-      padding: var(--space-5);
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-4);
-    }
-
-    .demo-live_answer_header {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-      gap: var(--space-3);
-      padding-bottom: var(--space-3);
-      border-bottom: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 10%, transparent);
-    }
-
-    .demo-live_badge_row {
-      display: flex;
-      align-items: center;
-      gap: var(--space-3);
-    }
-
-    .demo-live_status_badge {
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      font-weight: 700;
-      padding: 0.25rem 0.625rem;
-      border-radius: var(--radius-small);
-      letter-spacing: 0.05em;
-
-      &.verified {
-        background-color: color-mix(in lab, var(--brand-green) 14%, transparent);
-        border: var(--border-width) solid var(--brand-green);
-        color: var(--brand-green);
+      .searchdemo_query {
+        margin: 1.5rem;
+        border: 0.0625rem solid #b8c1ac;
+        border-radius: 0.4rem;
+        padding: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
       }
-      &.rejected {
-        background-color: rgba(255, 92, 92, 0.15);
-        border: var(--border-width) solid #ff5c5c;
-        color: #ff5c5c;
+      .searchdemo_query > span:first-child {
+        font-size: 1.75rem;
       }
-    }
-
-    .demo-live_source_count {
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      color: var(--brand-stone);
-    }
-
-    .demo-live_tamper_btn {
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      color: var(--brand-ivory);
-      background-color: color-mix(in lab, var(--brand-ivory) 8%, transparent);
-      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 20%, transparent);
-      border-radius: var(--radius-small);
-      padding: 0.35rem 0.75rem;
-      cursor: pointer;
-      transition: all var(--hover-duration) var(--hover-ease);
-
-      &.active,
-      &:hover {
-        border-color: #ff5c5c;
-        color: #ff5c5c;
-        background-color: rgba(255, 92, 92, 0.1);
+      .searchdemo_query p {
+        font-size: 1.1rem;
+        font-weight: 550;
       }
-    }
-
-    .demo-live_answer_body {
-      font-size: var(--text-main);
-      line-height: var(--line-height-large);
-      color: var(--brand-ivory);
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-3);
-      transition: opacity 0.2s ease;
-
-      code {
-        font-family: var(--font-mono);
-        background-color: var(--dark-900);
-        padding: 0.15em 0.4em;
-        border-radius: 0.25em;
-        font-size: 0.9em;
+      .searchdemo_scope {
+        margin-left: auto;
+        white-space: nowrap;
+        font-size: 0.65rem;
+        padding: 0.4rem 0.6rem;
+        border-radius: 0.25rem;
+        background: #dcebd8;
       }
-    }
-
-    .demo-live_cite {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      font-weight: 700;
-      color: var(--brand-green);
-      background-color: color-mix(in lab, var(--brand-green) 16%, transparent);
-      border: var(--border-width) solid var(--brand-green);
-      border-radius: 0.25rem;
-      padding: 0 0.35rem;
-      margin-inline: 0.15rem;
-      cursor: pointer;
-      vertical-align: baseline;
-      transition: transform 0.15s ease, background-color 0.15s ease;
-
-      &:hover {
-        transform: scale(1.1);
-        background-color: var(--brand-green);
-        color: var(--brand-ink);
+      .searchdemo_tabs {
+        display: flex;
+        gap: 1.5rem;
+        padding: 0 1.5rem;
+        border-bottom: 0.0625rem solid #d4d7c8;
       }
-    }
-
-    .demo-live_tamper_notice {
-      display: flex;
-      gap: var(--space-3);
-      background-color: rgba(255, 92, 92, 0.1);
-      border: var(--border-width) solid #ff5c5c;
-      border-radius: var(--radius-small);
-      padding: var(--space-3);
-    }
-
-    .demo-live_tamper_icon {
-      font-size: 1.5rem;
-    }
-
-    .demo-live_tamper_text {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-      font-size: var(--text-small);
-      color: #ffb4b4;
-
-      strong {
-        color: #ff5c5c;
-        font-family: var(--font-mono);
+      .searchdemo_tabs button {
+        padding: 0.75rem 0.25rem;
+        color: #52604e;
+        border-bottom: 0.15rem solid transparent;
+        font-size: 0.85rem;
+        cursor: pointer;
       }
-    }
-
-    /* Evidence Cards Section */
-    .demo-live_evidence_section {
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-3);
-    }
-
-    .demo-live_evidence_heading {
-      display: flex;
-      justify-content: space-between;
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      color: var(--brand-stone);
-      letter-spacing: 0.05em;
-    }
-
-    .demo-live_containment_badge {
-      color: var(--brand-green);
-    }
-
-    .demo-live_evidence_grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: var(--space-3);
-      @media (width >= 48rem) {
-        grid-template-columns: repeat(2, 1fr);
+      .searchdemo_tabs button[aria-selected="true"] {
+        color: #13211a;
+        border-color: #28793b;
+        font-weight: 600;
       }
-      @media (width >= 64rem) {
-        grid-template-columns: repeat(4, 1fr);
+      .searchdemo_body {
+        padding: 1.5rem;
+        min-height: 27rem;
       }
-    }
-
-    .demo-live_evidence_card {
-      background-color: var(--dark-900);
-      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 12%, transparent);
-      border-radius: var(--radius-small);
-      padding: var(--space-3);
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-2);
-      transition: all 0.2s ease;
-
-      &.highlighted {
-        border-color: var(--brand-green);
-        box-shadow: 0 0 1rem color-mix(in lab, var(--brand-green) 30%, transparent);
-        background-color: color-mix(in lab, var(--dark-800) 90%, var(--brand-green));
+      .searchdemo_result + .searchdemo_result {
+        border-top: 0.0625rem solid #d4d7c8;
+        margin-top: 1.25rem;
+        padding-top: 1.25rem;
       }
-    }
-
-    .demo-live_evidence_header {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .demo-live_cite_num {
-      font-family: var(--font-mono);
-      font-size: 0.8rem;
-      font-weight: 700;
-      color: var(--brand-green);
-    }
-
-    .demo-live_evidence_type {
-      font-family: var(--font-mono);
-      font-size: 0.6875rem;
-      padding: 0.15rem 0.35rem;
-      border-radius: 0.25rem;
-      font-weight: 600;
-
-      &.web {
-        background-color: rgba(59, 130, 246, 0.15);
-        color: #93c5fd;
+      .searchdemo_kind {
+        font-family: monospace;
+        font-size: 0.65rem;
+        color: #28793b;
+        letter-spacing: 0.07em;
+        display: block;
+        margin-bottom: 0.6rem;
       }
-      &.vault {
-        background-color: rgba(168, 85, 247, 0.15);
-        color: #d8b4fe;
+      p {
+        font-size: 0.95rem;
+        line-height: 1.7;
+        max-width: 75ch;
+        margin: 0.5rem 0;
       }
-      &.docs {
-        background-color: rgba(234, 179, 8, 0.15);
-        color: #fde047;
+      small {
+        color: #52604e;
+        font-size: 0.7rem;
       }
-      &.history {
-        background-color: rgba(20, 184, 166, 0.15);
-        color: #5eead4;
-      }
-    }
-
-    .demo-live_evidence_host {
-      font-family: var(--font-mono);
-      font-size: 0.6875rem;
-      color: var(--brand-stone);
-      margin-left: auto;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .demo-live_evidence_title {
-      font-size: var(--text-small);
-      font-weight: var(--primary-bold);
-      color: var(--brand-ivory);
-      line-height: var(--line-height-small);
-    }
-
-    .demo-live_evidence_snippet {
-      font-size: 0.8rem;
-      color: var(--brand-stone);
-      line-height: var(--line-height-medium);
-      font-style: italic;
-    }
-
-    .demo-live_evidence_meta {
-      font-family: var(--font-mono);
-      font-size: 0.6875rem;
-      color: color-mix(in lab, var(--brand-stone) 70%, transparent);
-      margin-top: auto;
-      padding-top: var(--space-2);
-      border-top: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 6%, transparent);
-    }
-
-    /* Search Results */
-    .demo-live_search_results {
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-3);
-    }
-
-    .demo-live_search_row {
-      background-color: var(--dark-800);
-      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 12%, transparent);
-      border-radius: var(--radius-small);
-      padding: var(--space-4);
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-2);
-    }
-
-    .demo-live_source_indicator {
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      font-weight: 700;
-      width: fit-content;
-      padding: 0.2rem 0.5rem;
-      border-radius: var(--radius-small);
-
-      &.vault {
-        color: #d8b4fe;
-        background-color: rgba(168, 85, 247, 0.15);
-      }
-      &.docs {
-        color: #fde047;
-        background-color: rgba(234, 179, 8, 0.15);
-      }
-      &.web {
-        color: #93c5fd;
-        background-color: rgba(59, 130, 246, 0.15);
-      }
-      &.history {
-        color: #5eead4;
-        background-color: rgba(20, 184, 166, 0.15);
-      }
-    }
-
-    .demo-live_search_info {
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-1);
-    }
-
-    .demo-live_search_title {
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: var(--brand-ivory);
-      text-decoration: none;
-      &:hover {
-        color: var(--brand-green);
+      a {
+        color: #28793b;
         text-decoration: underline;
       }
-    }
-
-    .demo-live_search_snippet {
-      font-size: var(--text-small);
-      color: var(--brand-stone);
-      line-height: var(--line-height-medium);
-      code {
-        font-family: var(--font-mono);
-        color: var(--brand-ivory);
+      details {
+        margin-top: 1rem;
+        border: 0.0625rem solid #d4d7c8;
+        border-radius: 0.3rem;
+        padding: 0.75rem 1rem;
+        font-size: 0.85rem;
       }
-    }
-
-    .demo-live_search_meta {
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      color: var(--brand-stone);
-    }
-
-    /* Research Layout */
-    .demo-live_research_layout {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: var(--space-4);
-      @media (width >= 48rem) {
-        grid-template-columns: 1fr 2fr;
+      summary {
+        cursor: pointer;
+        font-weight: 550;
       }
-    }
-
-    .demo-live_research_steps {
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-2);
-    }
-
-    .demo-live_rstep {
-      display: flex;
-      align-items: flex-start;
-      gap: var(--space-3);
-      padding: var(--space-3);
-      border-radius: var(--radius-small);
-      background-color: var(--dark-800);
-      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 10%, transparent);
-
-      &.complete {
-        border-color: color-mix(in lab, var(--brand-green) 40%, transparent);
-        .demo-live_rnum {
-          background-color: var(--brand-green);
-          color: var(--brand-ink);
+      blockquote {
+        border-left: 0.15rem solid #28793b;
+        padding-left: 1rem;
+        margin: 1rem 0;
+        line-height: 1.7;
+      }
+      ol {
+        padding-left: 1.25rem;
+        margin-top: 1rem;
+      }
+      li {
+        padding: 0.65rem 0;
+        line-height: 1.7;
+      }
+      .searchdemo_caveat {
+        padding-top: 1.5rem;
+        color: #52604e;
+      }
+      @media (width < 48rem) {
+        .searchdemo_top {
+          flex-direction: column;
+          gap: 0.3rem;
         }
-      }
-
-      &.active {
-        border-color: var(--brand-green);
-        box-shadow: 0 0 0.5rem color-mix(in lab, var(--brand-green) 20%, transparent);
-        .demo-live_rnum {
-          background-color: var(--brand-green);
-          color: var(--brand-ink);
-          animation: pulse 1.5s infinite;
+        .searchdemo_scope {
+          display: none;
         }
-      }
-    }
-
-    .demo-live_rnum {
-      width: 1.5rem;
-      height: 1.5rem;
-      border-radius: 50%;
-      background-color: var(--dark-700);
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .demo-live_rinfo {
-      display: flex;
-      flex-direction: column;
-      gap: 0.2rem;
-      strong {
-        font-size: var(--text-small);
-        color: var(--brand-ivory);
-      }
-      span {
-        font-size: 0.75rem;
-        color: var(--brand-stone);
-      }
-    }
-
-    .demo-live_research_synthesis {
-      background-color: var(--dark-800);
-      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 12%, transparent);
-      border-radius: var(--radius-small);
-      padding: var(--space-4);
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-3);
-    }
-
-    .demo-live_research_header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding-bottom: var(--space-2);
-      border-bottom: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 10%, transparent);
-      strong {
-        font-family: var(--display-family);
-        color: var(--brand-ivory);
-      }
-    }
-
-    .demo-live_tag {
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      color: var(--brand-green);
-      background-color: color-mix(in lab, var(--brand-green) 12%, transparent);
-      padding: 0.2rem 0.5rem;
-      border-radius: var(--radius-small);
-    }
-
-    .demo-live_research_body {
-      font-size: var(--text-small);
-      line-height: var(--line-height-large);
-      color: var(--brand-ivory);
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-2);
-      h4 {
-        font-family: var(--display-family);
-        color: var(--brand-green);
-        margin-top: var(--space-2);
-      }
-    }
-
-    @keyframes pulse {
-      0%, 100% {
-        opacity: 1;
-      }
-      50% {
-        opacity: 0.5;
+        .searchdemo_body {
+          min-height: 32rem;
+          padding: 1rem;
+        }
+        .searchdemo_query {
+          margin: 1rem;
+        }
       }
     }
   }

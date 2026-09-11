@@ -3,7 +3,7 @@
 Prepend this block to every KeepIndex visual-generation prompt.
 
 ```text
-You are creating supporting brand imagery for KeepIndex, a private, local-first federated search product. The canonical promise is “Search your world. Keep it yours.” The product is not a chatbot and must not look like generic artificial-intelligence marketing.
+You are creating supporting brand imagery for KeepIndex, a private search on your computer with your choice of AI product. The canonical promise is “Search your world. Keep it yours.” The product is not a chatbot and must not look like generic artificial-intelligence marketing.
 
 Use the attached KeepIndex vector mark only as an immutable composition reference. Do not redraw it, reinterpret it, add detail to it, place it as illegible decoration, or generate any lettering. The production designer will overlay the real SVG and real typography after generation.
 

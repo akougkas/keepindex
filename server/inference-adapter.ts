@@ -2,7 +2,7 @@ import {
   LOCAL_INFERENCE_REDIRECT_POLICY,
   OLLAMA_INFERENCE_ADAPTER,
   OPENAI_COMPATIBLE_INFERENCE_ADAPTER,
-  requireLocalInferenceEndpoint,
+  requireInferenceEndpoint,
   type InferenceAdapter,
 } from './inference-endpoint-policy'
 
@@ -115,7 +115,9 @@ function observeOpenAiCompatibleChatResponse(
 
   const adoptModel = (payload: unknown): void => {
     const model = modelFromOpenAiPayload(payload)
-    if (model) responseModels.set(observed, model)
+    // Lemonade may report a backend GGUF filename. Keep its public catalog ID
+    // as the display identity instead of exposing an internal filesystem path.
+    if (model && !/^(?:[a-z]:[\\/]|\/|\\\\)/i.test(model)) responseModels.set(observed, model)
   }
   const parseSseLine = (line: string): void => {
     const normalized = line.endsWith('\r') ? line.slice(0, -1) : line
@@ -395,7 +397,7 @@ export class LocalInferenceTransport {
     private readonly fetchImpl?: typeof fetch,
     apiKey?: string
   ) {
-    this.baseUrl = requireLocalInferenceEndpoint(baseUrl)
+    this.baseUrl = requireInferenceEndpoint(baseUrl)
     this.activeAdapter = configuredAdapter.kind === 'ollama'
       ? OLLAMA_INFERENCE_ADAPTER
       : OPENAI_COMPATIBLE_INFERENCE_ADAPTER

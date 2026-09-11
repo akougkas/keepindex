@@ -20,6 +20,6 @@ Do not render the KeepIndex mark or any text. A designer will overlay the canoni
 Campaign overlays to add deterministically after generation:
 
 - `Search your world. Keep it yours.`
-- `Private, local-first federated search.`
+- `Private search on your computer. Your choice of AI.`
 - `keepindex.ing`
 - Optional campaign line: `Keep indexing.`

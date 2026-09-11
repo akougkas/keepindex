@@ -5,7 +5,7 @@ import {
   composeSignalPolicy,
   formatPlainStatus,
   inspectDatabasePath,
-  isPrivateInferenceUrl,
+  isValidInferenceUrl,
   parseCliArgs,
   resolveDatabasePath,
   resolveKeepIndexUrl,
@@ -78,13 +78,13 @@ describe('keepidx configuration precedence and safety', () => {
 
   test('rejects URL credentials and public/cloud inference hosts', () => {
     expect(() => resolveKeepIndexUrl('http://person:secret@localhost:5173', {})).toThrow('credentials')
-    expect(isPrivateInferenceUrl('http://127.0.0.1:8080')).toBe(true)
-    expect(isPrivateInferenceUrl('http://192.168.1.20:8080')).toBe(true)
-    expect(isPrivateInferenceUrl('http://100.64.12.8:8080')).toBe(true)
-    expect(isPrivateInferenceUrl('http://host.docker.internal:8080')).toBe(true)
-    expect(isPrivateInferenceUrl('http://llama.local:8080')).toBe(true)
-    expect(isPrivateInferenceUrl('https://api.openai.com')).toBe(false)
-    expect(isPrivateInferenceUrl('https://inference.example.com')).toBe(false)
+    expect(isValidInferenceUrl('http://127.0.0.1:8080')).toBe(true)
+    expect(isValidInferenceUrl('http://192.168.1.20:8080')).toBe(true)
+    expect(isValidInferenceUrl('http://100.64.12.8:8080')).toBe(true)
+    expect(isValidInferenceUrl('http://host.docker.internal:8080')).toBe(true)
+    expect(isValidInferenceUrl('http://llama.local:8080')).toBe(true)
+    expect(isValidInferenceUrl('https://api.openai.com')).toBe(true)
+    expect(isValidInferenceUrl('https://inference.example.com')).toBe(true)
   })
 
   test('uses only the canonical database setting and checks safe file targets', () => {
@@ -114,7 +114,7 @@ describe('keepidx status output', () => {
       index: { resources: 2, unavailable: 1 },
       models: { active: 'local-model', count: 3 },
     })
-    expect(formatPlainStatus(shaped)).toContain('SearXNG: ready\nLocal inference: unavailable')
+    expect(formatPlainStatus(shaped)).toContain('SearXNG: ready\nAI endpoint: unavailable')
   })
 
   test('status --json emits one stable object and uses /api/health', async () => {
@@ -246,7 +246,7 @@ describe('keepidx command behavior', () => {
     expect(output.stdout()).toBe('http://localhost:8123\n')
   })
 
-  test('doctor fails a public inference endpoint without printing its path', async () => {
+  test('doctor accepts an explicitly configured remote endpoint without printing its path', async () => {
     const output = outputHarness()
     const code = await runCli(['doctor'], {
       env: { LLM_URL: 'https://api.example.com/secret-model' },
@@ -257,8 +257,8 @@ describe('keepidx command behavior', () => {
       probePort: async () => 'available',
       probeUrl: async () => false,
     })
-    expect(code).toBe(1)
-    expect(output.stdout()).toContain('[fail] Inference policy: LLM_URL must resolve to a local or private-network endpoint')
+    expect(code).toBe(0)
+    expect(output.stdout()).toContain('[ok] Inference URL: https://api.example.com')
     expect(output.stdout()).not.toContain('secret-model')
   })
 
@@ -274,7 +274,7 @@ describe('keepidx command behavior', () => {
       probeUrl: async () => false,
     })
     expect(code).toBe(1)
-    expect(output.stdout()).toContain('[fail] Inference URL: invalid private HTTP(S) endpoint')
+    expect(output.stdout()).toContain('[fail] Inference URL: invalid HTTP(S) inference endpoint')
     expect(output.stdout()).not.toContain('private-user')
     expect(output.stdout()).not.toContain('do-not-print')
   })
@@ -301,7 +301,7 @@ describe('keepidx command behavior', () => {
     expect(probes).toContain('http://127.0.0.1:11434/api/tags')
     expect(probes.some((url) => url.endsWith('/v1/models'))).toBe(false)
     expect(output.stdout()).toContain('[ok] Inference provider: ollama')
-    expect(output.stdout()).toContain('[ok] Local inference: reachable')
+    expect(output.stdout()).toContain('[ok] AI endpoint: reachable')
   })
 
   test('doctor probes OpenAI-compatible servers at /v1/models', async () => {
@@ -310,7 +310,7 @@ describe('keepidx command behavior', () => {
     const code = await runCli(['doctor'], {
       env: {
         KEEPINDEX_INFERENCE_PROVIDER: 'openai-compatible',
-        LLM_URL: 'http://inference.local:8080',
+        LLM_URL: 'http://inference:8080',
       },
       cwd: process.cwd(),
       writeOut: output.writeOut,
@@ -318,12 +318,12 @@ describe('keepidx command behavior', () => {
       commandVersion: () => ({ ok: true, detail: 'available' }),
       probePort: async () => 'available',
       probeUrl: async (url) => {
-        if (url.startsWith('http://inference.local:8080')) inferenceProbes.push(url)
+        if (url.startsWith('http://inference:8080')) inferenceProbes.push(url)
         return url.endsWith('/v1/models')
       },
     })
     expect(code).toBe(0)
-    expect(inferenceProbes).toEqual(['http://inference.local:8080/v1/models'])
+    expect(inferenceProbes).toEqual(['http://inference:8080/v1/models'])
     expect(output.stdout()).toContain('[ok] Inference provider: openai-compatible')
   })
 
@@ -354,7 +354,7 @@ describe('keepidx command behavior', () => {
     const code = await runCli(['doctor'], {
       env: {
         KEEPINDEX_INFERENCE_PROVIDER: 'openai-compatible',
-        LLM_URL: 'http://inference.local:8080',
+        LLM_URL: 'http://inference:8080',
         LLM_API_KEY: '  private-gateway-token  ',
       },
       cwd: process.cwd(),
@@ -368,11 +368,11 @@ describe('keepidx command behavior', () => {
       },
     })
     expect(code).toBe(0)
-    const inference = requests.filter(({ url }) => url.startsWith('http://inference.local:8080/'))
+    const inference = requests.filter(({ url }) => url.startsWith('http://inference:8080/'))
     expect(inference).toHaveLength(1)
     expect(new Headers(inference[0].init?.headers).get('Authorization')).toBe('Bearer private-gateway-token')
     expect(inference[0].init?.redirect).toBe('error')
-    for (const request of requests.filter(({ url }) => !url.startsWith('http://inference.local:8080/'))) {
+    for (const request of requests.filter(({ url }) => !url.startsWith('http://inference:8080/'))) {
       expect(new Headers(request.init?.headers).has('Authorization')).toBe(false)
     }
     expect(output.stdout() + output.stderr()).not.toContain('private-gateway-token')

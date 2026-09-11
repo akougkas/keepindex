@@ -1,0 +1,156 @@
+---
+import Section from "@/components/Wrapper/Section.astro";
+import ContentWrapper from "@/components/Wrapper/ContentWrapper.astro";
+import Heading from "@/components/Typography/Heading.astro";
+import Eyebrow from "@/components/Typography/Eyebrow.astro";
+import Paragraph from "@/components/Typography/Paragraph.astro";
+import ContentTerminalCli from "@/components/Interactive/ContentTerminalCli.astro";
+interface Props {
+  /** Set to `false` to skip rendering this component and its children. */
+  render?: boolean;
+  /** Short label above the page title. */
+  eyebrow: string;
+  /** The page's primary heading. */
+  title: string;
+  /** Introductory explanation. */
+  intro: string;
+  /** Ordered sections of the guide. */
+  sections: {
+    id: string;
+    title: string;
+    paragraphs: string[];
+    code?: string;
+    link?: { href: string; label: string };
+  }[];
+}
+const { render = true, eyebrow, title, intro, sections } = Astro.props;
+---
+
+{
+  render && title && (
+    <div class="guide_wrap">
+      <Section paddingTop="large" paddingBottom="medium">
+        <ContentWrapper variant="stack">
+          <>
+            <Eyebrow>{eyebrow}</Eyebrow>
+            <Heading tag="h1" variant="display" maxWidth={20}>
+              {title}
+            </Heading>
+            <Paragraph variant="large" maxWidth={58}>
+              {intro}
+            </Paragraph>
+          </>
+        </ContentWrapper>
+      </Section>
+      <Section paddingTop="none" paddingBottom="large">
+        <div class="guide_layout">
+          <nav class="guide_contents" aria-label="On this page">
+            <p>On this page</p>
+            {sections.map((section, index) => (
+              <a href={`#${section.id}`}>
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                {section.title}
+              </a>
+            ))}
+          </nav>
+          <div class="guide_sections">
+            {sections.map((section, index) => (
+              <section class="guide_section" id={section.id}>
+                <Eyebrow>{String(index + 1).padStart(2, "0")}</Eyebrow>
+                <Heading tag="h2" variant="h3">
+                  {section.title}
+                </Heading>
+                {section.paragraphs.map((text) => (
+                  <Paragraph>{text}</Paragraph>
+                ))}
+                {section.code && (
+                  <ContentTerminalCli
+                    code={section.code}
+                    title={section.title}
+                  />
+                )}
+                {section.link && (
+                  <a class="guide_link" href={section.link.href}>
+                    {section.link.label} ↗
+                  </a>
+                )}
+              </section>
+            ))}
+          </div>
+        </div>
+      </Section>
+    </div>
+  )
+}
+<style is:global>
+  @layer components {
+    .guide_wrap {
+      .guide_layout {
+        display: grid;
+        grid-template-columns: 1fr 2.4fr;
+        gap: 5rem;
+        width: 100%;
+      }
+      .guide_contents {
+        align-self: start;
+        position: sticky;
+        top: 7rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+      .guide_contents p {
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #a7a59b;
+        padding-bottom: 0.5rem;
+      }
+      .guide_contents a {
+        display: flex;
+        gap: 0.75rem;
+        font-size: 0.85rem;
+        line-height: 1.5;
+      }
+      .guide_contents span {
+        font-family: monospace;
+        font-size: 0.65rem;
+        color: #62d66b;
+        margin-top: 0.15rem;
+      }
+      .guide_sections {
+        min-width: 0;
+      }
+      .guide_section {
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+        border-top: 0.0625rem solid #ffffff22;
+        padding: 2rem 0 3.5rem;
+        scroll-margin-top: 7rem;
+      }
+      .guide_section p {
+        max-width: 68ch;
+        color: #c7cbc1;
+        line-height: 1.8;
+      }
+      .guide_link {
+        color: #62d66b;
+        text-decoration: underline;
+        text-underline-offset: 0.25em;
+        font-size: 0.9rem;
+      }
+      @media (width < 64rem) {
+        .guide_layout {
+          grid-template-columns: 1fr;
+          gap: 2rem;
+        }
+        .guide_contents {
+          position: static;
+          border-top: 0.0625rem solid #ffffff22;
+          padding-top: 1.5rem;
+        }
+      }
+    }
+  }
+</style>

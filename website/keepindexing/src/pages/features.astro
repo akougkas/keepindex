@@ -1,329 +1,68 @@
 ---
 import Layout from "@/layouts/BaseLayout.astro";
-import Section from "@/components/Wrapper/Section.astro";
-import ContentWrapper from "@/components/Wrapper/ContentWrapper.astro";
-import Heading from "@/components/Typography/Heading.astro";
-import Eyebrow from "@/components/Typography/Eyebrow.astro";
-import Paragraph from "@/components/Typography/Paragraph.astro";
-import ButtonWrapper from "@/components/Wrapper/ButtonWrapper.astro";
-import Button from "@/components/Button.astro";
-import Grid from "@/components/Wrapper/Grid.astro";
-import Card from "@/components/Item/Card.astro";
-import Accordion from "@/components/Interactive/Accordion.astro";
-import AccordionItem from "@/components/Interactive/AccordionItem.astro";
-import ContentArchitectureGraphic from "@/components/Interactive/ContentArchitectureGraphic.astro";
+import ContentGuide from "@/components/Item/ContentGuide.astro";
+const content = {
+  eyebrow: "The product",
+  title: "Find the thread in your own sources.",
+  intro:
+    "KeepIndex combines search, cited answers, and research in a personal workspace installed on your computer.",
+  sections: [
+    {
+      id: "sources",
+      title: "A useful index starts with your choices",
+      paragraphs: [
+        "Add a folder of notes, an Obsidian vault, local documents, or a code project. KeepIndex extracts readable text, chunks it, and ranks matches on this computer. Original files stay in place.",
+        "PDF, DOCX, ODT, RTF, and EPUB extraction is included in the Docker image. Unsupported documents may contribute metadata only. Hidden folders and secret-like files are excluded by default; you still decide which folders are appropriate.",
+      ],
+      link: {
+        href: "/docs#folders",
+        label: "Grant your first folder",
+      },
+    },
+    {
+      id: "history",
+      title: "Find a page you remember visiting",
+      paragraphs: [
+        "Choose individual Chrome, Edge, Brave, Chromium, or Firefox profiles before importing history. Search titles, URLs, visit counts, and timestamps alongside your other sources.",
+        "The importer does not read passwords or cookies. Docker needs an explicit read-only profile mount. A page open in your browser cannot grant this access by itself.",
+      ],
+    },
+    {
+      id: "modes",
+      title: "Search first. Ask when it helps.",
+      paragraphs: [
+        "Search returns ranked results you can inspect directly. Answer uses a bounded source pack and your selected model to produce a cited response. Research explores a topic through several questions before assembling a report.",
+        "Citation identifiers and coverage are checked, with bounded repair for some errors. These checks help catch missing support; they do not prove an answer true. Follow the sources when accuracy matters.",
+      ],
+      link: {
+        href: "/#demo",
+        label: "Explore the sample workspace",
+      },
+    },
+    {
+      id: "web",
+      title: "Include the web deliberately",
+      paragraphs: [
+        "A SearXNG container on your computer combines public search engine results. Use All to mix web and local sources, Web for web results, or a Files, Vaults, Docs, or History target for that local category.",
+        "Web-enabled search terms reach external engines. Fetched pages make ordinary website requests. Local hosting of SearXNG does not make those interactions private from the destination.",
+      ],
+    },
+    {
+      id: "everyday",
+      title: "A workspace that belongs here",
+      paragraphs: [
+        "Keep collections, sessions, search history, and evidence records on this computer. Install the local web app as a PWA in a supported browser, or keep it in a normal tab.",
+        "The public product site has no account or private workspace. Remote access, phone pairing, and federation are deferred.",
+      ],
+      link: {
+        href: "/docs",
+        label: "Install KeepIndex",
+      },
+    },
+  ],
+};
 ---
 
-<Layout
-  title="Features & Retrieval Architecture"
-  description="Deep dive into KeepIndex's 4 federated retrieval paths, post-generation citation gate, local document intelligence, and private browser memory."
-  theme="dark"
+<Layout title={content.title} description={content.intro}
+  ><ContentGuide {...content} /></Layout
 >
-  {/* 1. Features Hero */}
-  <Section paddingTop="large" paddingBottom="medium">
-    <ContentWrapper variant="stack" centered={true}>
-      <Eyebrow variant="tag">Retrieval Architecture</Eyebrow>
-      <Heading tag="h1" variant="display" maxWidth={26}>
-        Four retrieval paths. One sovereign index.
-      </Heading>
-      <Paragraph maxWidth={54} variant="large">
-        KeepIndex breaks the monopoly of cloud search by federating your personal knowledge silo—web, vault, documents, and browser memory—into a single lexical ranking engine governed by an uncompromising citation gate.
-      </Paragraph>
-      <ButtonWrapper>
-        <Button element="link" href="/docs" emphasis="primary">Get Started</Button>
-        <Button element="link" href="/inference" emphasis="secondary">Local AI Guide</Button>
-      </ButtonWrapper>
-    </ContentWrapper>
-  </Section>
-
-  {/* 2. Four Retrieval Paths Deep Dive */}
-  <Section paddingTop="medium" paddingBottom="large">
-    <ContentWrapper variant="stack">
-      <Eyebrow>Source Federation</Eyebrow>
-      <Heading tag="h2" variant="h1" maxWidth={30}>
-        How KeepIndex searches your world
-      </Heading>
-      <Paragraph maxWidth={52}>
-        Every retrieval path enforces its own privacy boundary before candidates reach admission and fusion.
-      </Paragraph>
-
-      <Grid medium={2} large={2} class="features_path_grid">
-        <Card
-          eyebrow="PATH 01 · SELF-HOSTED WEB"
-          heading="SearXNG Meta-Search"
-          text="SearXNG makes the outbound web requests across dozens of engines. KeepIndex receives only result metadata and snippets. Public web hydration runs under strict byte and time budgets over exact allowlists, sending zero tracking cookies or credentials."
-          theme="dark"
-        />
-
-        <Card
-          eyebrow="PATH 02 · PERSONAL KNOWLEDGE"
-          heading="Obsidian Vaults"
-          text="KeepIndex recognizes Obsidian roots by their .obsidian directory. Markdown notes, frontmatter YAML tags, aliases, and wikilinks are extracted and converted into searchable lexical metadata with BM25 ranking across headers and chunk boundaries."
-          theme="dark"
-        />
-
-        <Card
-          eyebrow="PATH 03 · LOCAL FILES & CODE"
-          heading="Document Intelligence"
-          text="Indexes plain text, Markdown, and source code directly. Uses pdftotext for PDF documents and Pandoc for DOCX, ODT, RTF, and EPUB. Credential-like dotfiles, private keys, API secrets, and password files are strictly excluded before indexing."
-          theme="dark"
-        />
-
-        <Card
-          eyebrow="PATH 04 · PRIVATE BROWSER MEMORY"
-          heading="Opt-in Browser History"
-          text="Discovers local Chromium and Firefox profile databases. Opens a temporary read-only copy and imports only URL, page title, and visit timestamps. Passwords, session cookies, and bodies are ignored; query tokens and OAuth fragments are stripped before storage."
-          theme="dark"
-        />
-      </Grid>
-    </ContentWrapper>
-  </Section>
-
-  {/* 3. The Scaling Graphic Pipeline */}
-  <Section paddingTop="medium" paddingBottom="large">
-    <ContentWrapper variant="stack">
-      <Eyebrow>The Data Pipeline</Eyebrow>
-      <Heading tag="h2" variant="h1" maxWidth={30}>
-        From untrusted evidence to verified answers
-      </Heading>
-      <Paragraph maxWidth={52}>
-        Watch how candidates from all four sources are admitted, packed into a bounded evidence pack, and verified through the post-generation citation gate.
-      </Paragraph>
-
-      <ContentArchitectureGraphic />
-    </ContentWrapper>
-  </Section>
-
-  {/* 4. The Citation & Grounding Gate */}
-  <Section paddingTop="medium" paddingBottom="large" id="citation-gate">
-    <ContentWrapper variant="stack">
-      <Eyebrow>Grounding Protocol</Eyebrow>
-      <Heading tag="h2" variant="h1" maxWidth={30}>
-        The Post-Generation Citation Gate
-      </Heading>
-      <Paragraph maxWidth={54}>
-        Most "AI search" tools generate hallucinations with decorative hyperlinks. KeepIndex implements a fail-closed grounding gate that treats model output as unverified until proven otherwise.
-      </Paragraph>
-
-      <div class="features_gate_box">
-        <div class="features_gate_step">
-          <div class="features_gate_num">01</div>
-          <div class="features_gate_content">
-            <Heading tag="h3" variant="h4">Bounded Evidence Packing</Heading>
-            <Paragraph>
-              Prompts do not receive unbounded context. Admitted candidates are deduplicated, diversity-capped per host/path, and packed into an inspectable numbered list <code>[1..N]</code>.
-            </Paragraph>
-          </div>
-        </div>
-
-        <div class="features_gate_step">
-          <div class="features_gate_num">02</div>
-          <div class="features_gate_content">
-            <Heading tag="h3" variant="h4">Identifier Multiset Verification</Heading>
-            <Paragraph>
-              Every inline citation <code>[n]</code> generated by the local model must strictly exist inside the evidence pack. Any attempt to invent out-of-pack citations immediately fails verification.
-            </Paragraph>
-          </div>
-        </div>
-
-        <div class="features_gate_step">
-          <div class="features_gate_num">03</div>
-          <div class="features_gate_content">
-            <Heading tag="h3" variant="h4">Lexical Support &amp; Coverage Floor</Heading>
-            <Paragraph>
-              Sentences citing a source must exhibit genuine lexical overlap with that source's excerpt. Total sentence-level coverage must reach ≥80%. Responses falling short are quarantined as <code>status: no_evidence</code>.
-            </Paragraph>
-          </div>
-        </div>
-
-        <div class="features_gate_step">
-          <div class="features_gate_num">04</div>
-          <div class="features_gate_content">
-            <Heading tag="h3" variant="h4">Durable SQLite WAL Persistence</Heading>
-            <Paragraph>
-              The query, candidate pack, actual model used, grounding coverage score, and verified answer are persisted to local SQLite WAL for auditability and recovery.
-            </Paragraph>
-          </div>
-        </div>
-      </div>
-    </ContentWrapper>
-  </Section>
-
-  {/* 5. Advanced Query Operators */}
-  <Section paddingTop="medium" paddingBottom="large">
-    <ContentWrapper variant="stack">
-      <Eyebrow>Search Operators</Eyebrow>
-      <Heading tag="h2" variant="h1" maxWidth={28}>
-        Precision Search Operators
-      </Heading>
-      <Paragraph maxWidth={50}>
-        Filter across formats, paths, tags, and dates without opening separate applications.
-      </Paragraph>
-
-      <div class="features_operators_table_wrap">
-        <table class="features_operators_table">
-          <thead>
-            <tr>
-              <th scope="col">Operator</th>
-              <th scope="col">Example</th>
-              <th scope="col">Retrieval Behavior</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><code>type:</code></td>
-              <td><code>type:note</code> or <code>type:web</code></td>
-              <td>Restricts candidates strictly to Obsidian notes, web results, or documents.</td>
-            </tr>
-            <tr>
-              <td><code>ext:</code></td>
-              <td><code>ext:pdf</code> or <code>ext:ts</code></td>
-              <td>Filters indexed documents by file extension.</td>
-            </tr>
-            <tr>
-              <td><code>path:</code></td>
-              <td><code>path:projects/homelab</code></td>
-              <td>Restricts candidate chunks to files within a specified indexed root.</td>
-            </tr>
-            <tr>
-              <td><code>tag:</code></td>
-              <td><code>tag:research</code> or <code>tag:docker</code></td>
-              <td>Matches Obsidian YAML frontmatter and hashtag taxonomies.</td>
-            </tr>
-            <tr>
-              <td><code>before:</code> / <code>after:</code></td>
-              <td><code>after:2026-01-01</code></td>
-              <td>Temporal filters matching document modification or browser visit dates.</td>
-            </tr>
-            <tr>
-              <td><code>"..."</code> and <code>-word</code></td>
-              <td><code>"reverse proxy" -traefik</code></td>
-              <td>Exact phrase matching and negative term exclusion in SQLite BM25.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </ContentWrapper>
-  </Section>
-
-  {/* 6. Feature FAQ */}
-  <Section paddingTop="medium" paddingBottom="large">
-    <ContentWrapper variant="stack">
-      <Eyebrow>Questions</Eyebrow>
-      <Heading tag="h2" variant="h1">Feature FAQs</Heading>
-
-      <Accordion single={true} openFirst={true}>
-        <AccordionItem heading="Can I index a 50,000-note Obsidian vault?">
-          <p>
-            Yes. KeepIndex utilizes SQLite FTS5 in WAL mode with fast chunking and BM25 ranking. Chunks are cached and updated incrementally based on file modification timestamps.
-          </p>
-        </AccordionItem>
-
-        <AccordionItem heading="How does KeepIndex handle binary documents like PDFs and Word files?">
-          <p>
-            When <code>pdftotext</code> or Pandoc are available in the runtime container (pre-installed in the KeepIndex Docker image), files are extracted into structured text and chunked with provenance offsets. If a parser fails, KeepIndex retains a metadata-only record rather than corrupting the evidence pack.
-          </p>
-        </AccordionItem>
-
-        <AccordionItem heading="Can search work if my GPU or local model is turned off?">
-          <p>
-            Yes! Keyword and federated search across web, vault, files, and history function independently of model providers. Grounded Answer and Deep Research modes report degraded inference availability rather than failing or routing out to the public internet.
-          </p>
-        </AccordionItem>
-      </Accordion>
-    </ContentWrapper>
-  </Section>
-</Layout>
-
-<style is:global>
-  @layer components {
-    .features_path_grid {
-      margin-top: var(--space-4);
-    }
-
-    .features_gate_box {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: var(--space-4);
-      margin-top: var(--space-4);
-      @media (width >= 48rem) {
-        grid-template-columns: repeat(2, 1fr);
-      }
-    }
-
-    .features_gate_step {
-      background-color: var(--dark-900);
-      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 12%, transparent);
-      border-radius: var(--radius-small);
-      padding: var(--space-4);
-      display: flex;
-      gap: var(--space-3);
-    }
-
-    .features_gate_num {
-      font-family: var(--font-mono);
-      font-size: 1.25rem;
-      font-weight: 700;
-      color: var(--brand-green);
-      flex-shrink: 0;
-    }
-
-    .features_gate_content {
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-2);
-      h3 {
-        color: var(--brand-ivory);
-      }
-      p {
-        font-size: var(--text-small);
-        color: var(--brand-stone);
-        line-height: var(--line-height-medium);
-      }
-      code {
-        font-family: var(--font-mono);
-        color: var(--brand-green);
-      }
-    }
-
-    .features_operators_table_wrap {
-      width: 100%;
-      overflow-x: auto;
-      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 14%, transparent);
-      border-radius: var(--radius-main);
-      background-color: var(--dark-900);
-      margin-top: var(--space-4);
-    }
-
-    .features_operators_table {
-      width: 100%;
-      border-collapse: collapse;
-      text-align: left;
-      font-size: var(--text-small);
-    }
-
-    .features_operators_table th {
-      padding: var(--space-3) var(--space-4);
-      background-color: var(--dark-800);
-      font-family: var(--display-family);
-      font-weight: 700;
-      color: var(--brand-ivory);
-      border-bottom: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 12%, transparent);
-    }
-
-    .features_operators_table td {
-      padding: var(--space-3) var(--space-4);
-      border-bottom: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 8%, transparent);
-      vertical-align: middle;
-      color: var(--brand-stone);
-
-      code {
-        font-family: var(--font-mono);
-        color: var(--brand-green);
-        background-color: var(--dark-800);
-        padding: 0.15em 0.4em;
-        border-radius: 0.25em;
-      }
-    }
-  }
-</style>

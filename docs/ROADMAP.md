@@ -1,5 +1,15 @@
 # KeepIndex roadmap — verified remaining work
 
+## Product direction — September 2026
+
+The current scope is a complete single-computer installation: selected local files,
+opt-in browser history, local AI, local Docker services, and results stored on that
+computer. The public website is a separate static deployment. Federation, device
+pairing, remote access, and source agents are deferred. Earlier retrieval issue
+notes below are a historical backlog; consult the delivered list before treating
+an item as still open.
+
+
 Every item below was rechecked against the hardened implementation for the first
 public KeepIndex release after the 2026-08-29 retrieval pass. Speculative,
 already-fixed, and unreachable items were removed. Each remaining item names the

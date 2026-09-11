@@ -18,3 +18,9 @@ test-results
 Zone.Identifier
 assets/baseline.png
 assets/*gemini*
+
+# The product website is a separate static deployment, with its own dependencies.
+website
+
+# AI connection credentials stay on this installation.
+**/ai-connections.json*

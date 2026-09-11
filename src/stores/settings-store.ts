@@ -6,6 +6,7 @@ import { clearKeepIndexClientStorage, KEEPINDEX_STORAGE_KEYS } from '@/lib/stora
 
 export const DEFAULT_MODEL = ''
 export const FALLBACK_MODEL = ''
+let modelFetchGeneration = 0
 
 export interface ModelInfo {
   id: string
@@ -14,7 +15,10 @@ export interface ModelInfo {
   isReasoning?: boolean
 }
 
+export interface AiConnectionSummary { id: string; name: string; url: string; scope: 'local' | 'remote' }
+
 interface SettingsState {
+  aiConnection: AiConnectionSummary | null
   llmEndpoint: string
   searxngEndpoint: string
   selectedModel: string
@@ -50,6 +54,7 @@ export const useSettingsStore = create<SettingsState>()(
     (set, get) => ({
       // Provider endpoints are server-managed through environment variables;
       // the browser never needs machine-specific host or port defaults.
+      aiConnection: null,
       llmEndpoint: '',
       searxngEndpoint: '',
       selectedModel: DEFAULT_MODEL,
@@ -78,14 +83,14 @@ export const useSettingsStore = create<SettingsState>()(
           const response = await fetch('/api/models/select', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model }),
+            body: JSON.stringify({ model, connectionId: get().aiConnection?.id }),
           })
           if (!response.ok) {
             const data = await response.json().catch(() => ({})) as { error?: string }
             set({ selectedModel: previousModel, modelsError: data.error ?? 'Could not select this model.' })
           }
         } catch {
-          set({ selectedModel: previousModel, modelsError: 'Model selection will retry when the local inference server reconnects.' })
+          set({ selectedModel: previousModel, modelsError: 'Model selection will retry when the selected AI endpoint reconnects.' })
         }
       },
 
@@ -100,25 +105,29 @@ export const useSettingsStore = create<SettingsState>()(
       setGridCarbonIntensity: (gridCarbonGramsPerKwh) => set({ gridCarbonGramsPerKwh: Math.max(0, Math.min(2000, gridCarbonGramsPerKwh || 0)) }),
 
       fetchModels: async () => {
+        const generation = ++modelFetchGeneration
         set({ isLoadingModels: true, modelsError: null })
         try {
           const res = await fetch('/api/models')
           if (!res.ok) throw new Error('Failed to fetch models')
           const data = (await res.json()) as {
+            connection?: AiConnectionSummary
             models?: ModelInfo[]
             activeModel?: string
             configuredDefault?: string
             configuredFallback?: string
             error?: string
           }
+          if (generation !== modelFetchGeneration) return
           if (Array.isArray(data.models) && data.models.length > 0) {
-            const currentSelected = get().selectedModel
+            const currentSelected = data.connection?.id === get().aiConnection?.id ? get().selectedModel : ''
             const selectedModel = data.models.some((model) => model.id === currentSelected)
               ? currentSelected
               : data.models.some((model) => model.id === data.activeModel)
                 ? data.activeModel!
                 : data.models[0].id
             set({
+              aiConnection: data.connection ?? get().aiConnection,
               availableModels: data.models,
               selectedModel,
               configuredDefault: data.configuredDefault ?? get().configuredDefault,
@@ -127,9 +136,10 @@ export const useSettingsStore = create<SettingsState>()(
               modelsError: data.error ?? null,
             })
           } else {
-            set({ isLoadingModels: false, modelsError: data.error ?? null })
+            set({ aiConnection: data.connection ?? get().aiConnection, availableModels: [], selectedModel: '', isLoadingModels: false, modelsError: data.error ?? null })
           }
         } catch (err) {
+          if (generation !== modelFetchGeneration) return
           set({
             isLoadingModels: false,
             modelsError: err instanceof Error ? err.message : 'Could not fetch models',

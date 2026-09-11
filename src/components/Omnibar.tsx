@@ -1,3 +1,4 @@
+import { useSettingsStore } from '@/stores/settings-store'
 import {
   forwardRef,
   useEffect,
@@ -76,6 +77,7 @@ export const Omnibar = forwardRef<HTMLInputElement, OmnibarProps>(function Omnib
   const mode = useAppStore((state) => state.mode)
   const focusMode = useAppStore((state) => state.focusMode)
   const searchTarget = useAppStore((state) => state.searchTarget)
+  const aiConnection = useSettingsStore((state) => state.aiConnection)
   const semanticSearch = useAppStore((state) => state.semanticSearch)
   const isLoading = useAppStore((state) => state.isLoading)
   const isChatStreaming = useAppStore((state) => state.isChatStreaming)
@@ -346,6 +348,10 @@ export const Omnibar = forwardRef<HTMLInputElement, OmnibarProps>(function Omnib
         )}
       </div>
 
+      {aiConnection && <p className="mt-2 px-2 text-[11px] leading-relaxed text-muted-foreground" aria-live="polite">
+        AI: <span className="font-medium text-foreground">{aiConnection.name}</span>
+        {aiConnection.scope === 'remote' ? ' · Remote: prompts and retrieved excerpts go to this endpoint.' : ' · This computer'}
+      </p>}
       <AnimatePresence>
         {mathResult && (
           <motion.div

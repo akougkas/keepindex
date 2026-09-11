@@ -1,6 +1,6 @@
 {
   "id": "/",
-  "name": "KeepIndex — Private, local-first federated search",
+  "name": "KeepIndex — Private search on your computer",
   "short_name": "KeepIndex",
   "description": "Search your world. Keep it yours.",
   "start_url": "/",
@@ -41,7 +41,7 @@
     {
       "name": "Search with KeepIndex",
       "short_name": "New search",
-      "description": "Open a private federated search workspace.",
+      "description": "Search sources on this computer.",
       "url": "/",
       "icons": [{ "src": "/icons/keepindex-192.png", "sizes": "192x192" }]
     }

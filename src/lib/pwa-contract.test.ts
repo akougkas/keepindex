@@ -14,7 +14,7 @@ describe('KeepIndex PWA identity', () => {
       icons: Array<{ src: string; sizes: string; purpose: string }>
     }
 
-    expect(manifest.name).toBe('KeepIndex — Private, local-first federated search')
+    expect(manifest.name).toBe('KeepIndex — Private search on your computer')
     expect(manifest.short_name).toBe('KeepIndex')
     expect(manifest.description).toBe('Search your world. Keep it yours.')
     expect(manifest.icons).toEqual(expect.arrayContaining([

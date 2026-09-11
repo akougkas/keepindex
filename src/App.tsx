@@ -296,7 +296,7 @@ function Hero({ omnibarRef }: { omnibarRef: React.RefObject<HTMLInputElement | n
         <div className="hero-kicker mx-auto mb-6 inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/65 px-3 py-1.5 backdrop-blur-xl">
           <ShieldCheck className="size-3.5 text-primary" />
           <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-            private · local-first · federated
+            your computer · your sources · local AI
           </span>
         </div>
         <h2 className="hero-title mx-auto max-w-4xl text-balance text-[clamp(3.1rem,8vw,7.2rem)] font-semibold leading-[0.88] tracking-[-0.065em]">
@@ -304,7 +304,7 @@ function Hero({ omnibarRef }: { omnibarRef: React.RefObject<HTMLInputElement | n
           <span className="block text-primary">Keep it yours.</span>
         </h2>
         <p className="hero-descriptor mx-auto mt-6 max-w-xl text-balance text-sm text-muted-foreground sm:text-base">
-          Private, local-first federated search.
+          Private search on your computer. Your choice of AI.
           <span className="mx-2 text-border" aria-hidden>·</span>
           <span className="font-mono text-[0.78em] tracking-[0.1em] text-foreground">keepindex<span className="text-primary">.ing</span></span>
         </p>

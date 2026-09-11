@@ -1,114 +1,58 @@
-# Local inference providers
+# AI connections: local runtimes and remote gateways
 
-KeepIndex sends prompts and bounded evidence packs only to inference servers inside a user-controlled local network boundary. Authenticated private gateways can use a Bearer token. It has no public model-provider adapter, cloud fallback, or credential-bearing inference URL.
+KeepIndex runs and indexes data on your computer. AI is a separate choice: use Lemonade, LM Studio, Ollama, llama.cpp, another local runtime, Blade AI Gateway, or a configured OpenAI-compatible HTTP(S) endpoint. Local AI is the default recommendation; remote AI is supported explicitly.
 
-## Provider selection
+## Choose an endpoint, then a model
 
-```bash
-KEEPINDEX_INFERENCE_PROVIDER=auto
-LLM_URL=http://127.0.0.1:8080
-```
+Open **Settings → AI connections**. Select an endpoint, then select an advertised model in **Active AI model**. **Check endpoints** probes public model APIs for configured connections and standard local runtime ports. It does not scan the LAN, inspect model-cache folders, or connect to internal llama.cpp worker ports.
 
-The provider selector accepts:
+The initial catalog includes these local runtime connections:
 
-- `auto` — try the local OpenAI-compatible discovery endpoint, then bounded native Ollama discovery;
-- `openai-compatible` — use `/v1/models` and `/v1/chat/completions` only;
-- `ollama` — use native `/api/tags` and `/api/chat` only.
+| Runtime | Native base URL | Docker base URL | Transport |
+| --- | --- | --- | --- |
+| Lemonade | `http://127.0.0.1:13305/api` | `http://host.docker.internal:13305/api` | OpenAI-compatible |
+| LM Studio | `http://127.0.0.1:1234` | `http://host.docker.internal:1234` | OpenAI-compatible |
+| Ollama | `http://127.0.0.1:11434` | `http://host.docker.internal:11434` | Native Ollama |
+| llama.cpp | `http://127.0.0.1:8080` | `http://host.docker.internal:8080` | OpenAI-compatible |
 
-Auto-detection pins the working transport after discovery. It does not probe a public registry or download a model.
+Start the runtime and enable its API before checking. A configured profile shown as unavailable is not a claim that its runtime is installed or running. Use **Edit selected** for a custom port; older Lemonade installations can use a different public port. KeepIndex lists the models advertised by the runtime and does not download weights automatically.
 
-For an authenticated private gateway, set `LLM_API_KEY` in your untracked `.env` file alongside `LLM_URL`. Compose forwards this variable to the application. Native KeepIndex and `keepidx doctor` use the same variable. Copy the gateway's token value into `LLM_API_KEY`; provider-specific variables such as `LITELLM_API_KEY` are not read by KeepIndex. Leave the value empty for an unauthenticated local server.
+## Add Blade or any compatible endpoint
 
-The token is sent only to the configured inference endpoint for model discovery, completions, embeddings, and optional slot checks. The endpoint policy below still applies. Configure the gateway itself to route the selected models to runtimes within your intended private boundary.
+Use **Add endpoint**, enter a descriptive name, URL, protocol, and optional API key, then save. Saving does not select the endpoint. Select it from the endpoint menu when you want to use it. For an OpenAI-compatible API, both the server root and a base ending in `/v1` are accepted. A Lemonade `/api/v1` URL is normalized to the `/api` base.
 
-## Supported local engines
+For Blade, use `http://100.124.181.9:4000`, OpenAI-compatible, and the gateway's Bearer key. Its catalog includes gateway-prefixed identifiers such as `dynamo/ornith-1.5-35b-a3b`; KeepIndex preserves those exact identifiers.
 
-| Runtime | Transport | Configure |
-| --- | --- | --- |
-| llama.cpp / `llama-server` | OpenAI-compatible | Local server root, commonly `http://127.0.0.1:8080` |
-| vLLM | OpenAI-compatible | Local server root; do not append `/v1` to `LLM_URL` |
-| SGLang | OpenAI-compatible | Local server root |
-| LM Studio | OpenAI-compatible | Enable the local server and use its root URL |
-| Lemonade Server | OpenAI-compatible | Use the root of its locally exposed compatible service |
-| MLX-LM or another MLX-compatible server | OpenAI-compatible | Use the local compatible service root |
-| Ollama | Native or OpenAI-compatible | Prefer `KEEPINDEX_INFERENCE_PROVIDER=ollama` with the Ollama service root |
-| NVIDIA Triton | Compatible frontend/ensemble | Put a local OpenAI-compatible chat frontend in front of the model repository |
+A remote connection is labeled **Remote** in Settings and beside the query box. Prompts, conversation context, and retrieved evidence excerpts used for AI processing go to that selected endpoint. Original folders and the index stay on the computer, but this does not mean every piece of private content stays local when remote AI is selected. Use a local connection when the evidence must remain on this computer.
 
-The OpenAI-compatible label names a request/response format. It never routes through OpenAI.
+Model fallback, when configured, stays within the selected endpoint. KeepIndex never silently switches from local AI to a remote connection. Requests already running stay pinned to their original connection and credentials while you change the endpoint for later requests.
 
-Arbitrary Triton models expose model-specific tensor names, shapes, dtypes, decoders, and streaming behavior. KeepIndex cannot honestly infer that contract. A Triton deployment is supported when the owner exposes a compatible chat frontend or a stable ensemble that implements the documented compatible protocol.
+## Credentials and persistence
 
-## Model discovery and selection
+Connections and the selected model persist in `ai-connections.json` alongside the local database (`/data/ai-connections.json` in Docker). The file is written with owner-only permissions and is excluded from Git and image build contexts. Keys are never returned through the connection-list API or saved in browser storage. Changing an endpoint URL does not automatically transfer the previous URL's key.
 
-When `LLM_MODEL` is empty, KeepIndex selects the first model advertised by the local server. The UI shows the full advertised catalog. A request may select another advertised identifier, and every answer/query record reports the model actually used.
+Environment variables seed the initial configured connection on first startup:
 
-```bash
+```dotenv
+KEEPINDEX_AI_NAME=Lemonade
+LLM_URL=http://host.docker.internal:13305/api
+KEEPINDEX_INFERENCE_PROVIDER=openai-compatible
 LLM_MODEL=
+LLM_API_KEY=
 LLM_FALLBACK_MODEL=
+KEEPINDEX_EMBEDDING_MODEL=
 ```
 
-Set these only to identifiers the active local server advertises. KeepIndex ships no hardcoded production model.
+Once connections have been saved, edit them in Settings; the saved catalog takes precedence over these bootstrap variables. `KEEPINDEX_AI_CONNECTIONS_PATH` can override the native catalog path. Back up this credential-bearing file privately. A settings/state export does not include these keys.
 
-The model selector also accepts an identifier without its gateway route prefix (for example, `model-name` for `gateway/model-name`). An exact advertised identifier always wins. Use the full identifier when several routes advertise the same model, and for `LLM_MODEL` and `LLM_FALLBACK_MODEL`.
+Any HTTP(S) inference host can be configured explicitly, including LAN, Tailscale, and public services. Credentials inside URLs, query strings, fragments, and redirects are rejected. API keys are attached only to that connection's inference requests. Use HTTPS for remote connections unless the transport is protected separately, as with the Tailscale address above. A custom service must expose one of the supported protocols; proprietary APIs require a compatible gateway.
 
-Native Ollama results are normalized into the same internal catalog and completion shapes as compatible providers. Native streaming keeps answer content, finish reason, token counts, and timing data while deliberately discarding private reasoning fields. A malformed or incomplete stream still reaches the existing fail-closed terminal-frame checks.
+## Host runtime and Docker
 
-## Endpoint policy
+Docker Desktop reaches host services through `host.docker.internal`. Native KeepIndex normally uses loopback directly. Linux Docker Engine may require a runtime listener restricted to its local bridge. An AI container on the same Compose network is another option. KeepIndex itself and SearXNG remain published only on loopback.
 
-Allowed address forms include:
+Select a model that fits your hardware. Stop or start models using the runtime's own tools. An unavailable endpoint produces an unavailable AI result; retrieval can still work without AI. Web-enabled search separately sends queries to public search engines.
 
-- `localhost`, `127.0.0.0/8`, and IPv6 loopback;
-- RFC1918 IPv4;
-- Tailscale's shared `100.64.0.0/10` address range (without trusting arbitrary
-  public `.ts.net` names);
-- IPv6 unique-local and link-local addresses;
-- single-label container or homelab service names;
-- `host.docker.internal`;
-- names ending in `.localhost`, `.local`, `.lan`, `.internal`, or `.home.arpa`.
+## Current ZBook installation
 
-KeepIndex rejects:
-
-- public IP addresses and public DNS names;
-- OpenAI, Anthropic, and Google cloud host families explicitly;
-- URL usernames/passwords, query strings, and fragments;
-- non-HTTP(S) protocols;
-- redirects, including a redirect from an allowed local server to a public host.
-
-The rejection error never echoes the configured URL, so accidental credential material is not copied into logs.
-
-This is a DNS-free allow policy. A public hostname that happens to resolve to a private address is still rejected because DNS can change after validation. Use a stable local name or private address.
-
-## Docker connectivity
-
-The Compose stack supplies:
-
-```text
-LLM_URL=http://host.docker.internal:8080
-```
-
-Docker maps that name to the host gateway. The model server must listen on an interface reachable from Docker, and the host firewall should restrict that listener. KeepIndex itself remains published on host loopback by default.
-
-To use a model runtime in the same Compose network, add it through an explicit override and set `LLM_URL` to its single-label service name, for example `http://inference:8080`. Do not expose its port publicly unless another local client needs it.
-
-## Failure behavior
-
-- Missing local model server: web and local search remain available; answer/research features report degraded local inference.
-- Empty model catalog: no model identifier is invented.
-- Configured model unavailable: KeepIndex may try the configured local fallback but records the actual model used.
-- Provider timeout or incomplete stream: the query record is failed/interrupted rather than marked successful.
-- Reasoning-only response: one bounded retry may disable thinking; private reasoning is not exposed as answer text.
-- No evidence: KeepIndex refuses factual synthesis even when the local model is healthy.
-
-## Current multimodal boundary
-
-KeepIndex accepts model identifiers and capabilities from multimodal local servers, but the first-release evidence protocol supplies bounded text. It does not yet send document images or page crops to a vision model. Rich OCR, layout, figure, and multimodal indexing are under a separate architecture review because they must preserve page coordinates, citation provenance, resource budgets, and offline/container guarantees. Do not describe a multimodal model in the catalog as proof that visual ingestion is implemented.
-
-## Verify
-
-```bash
-keepidx doctor
-keepidx status
-keepidx status --json
-```
-
-`doctor` validates that the configured inference URL is private before probing it and redacts credential/query material. `status` reads the KeepIndex health endpoint and reports local provider/model availability without printing secrets.
+ZBook uses Lemonade's **public API on port 13305**, with its existing model catalog. Port 8001/8002 llama.cpp workers and Hugging Face cache-file paths are implementation details of that runtime, not KeepIndex connections. Blade AI Gateway is an additional authenticated connection. LM Studio, Ollama, and standalone llama.cpp are checked at their public local APIs and may be unavailable until started. The application, sources, local index, and SearXNG stay on ZBook; Blade also hosts the separate static product website.

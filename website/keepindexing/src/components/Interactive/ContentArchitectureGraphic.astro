@@ -1,488 +1,218 @@
 ---
+import Heading from "@/components/Typography/Heading.astro";
 interface Props {
   /** Set to `false` to skip rendering this component and its children. */
   render?: boolean;
 }
-
 const { render = true } = Astro.props;
 ---
 
 {
   render && (
-    <div class="architecture-graphic_wrap">
-      <div class="architecture-graphic_artboard" aria-label="KeepIndex Sovereign Architecture Diagram">
-        {/* Subtle background grid & coordinate accents */}
-        <div class="architecture-graphic_grid" aria-hidden="true" />
-
-        {/* Header bar */}
-        <div class="architecture-graphic_header">
-          <div class="architecture-graphic_badge">
-            <span class="architecture-graphic_dot" />
-            <span>SOVEREIGN RETRIEVAL &amp; GROUNDING PIPELINE</span>
-          </div>
-          <div class="architecture-graphic_stat">ZERO CLOUD FALLBACK · STRICT RFC1918 / LOOPBACK BOUNDARY</div>
+    <div class="machine_wrap">
+      <div class="machine_label">
+        <span class="machine_indicator" />
+        Your computer <span class="machine_status">One installation</span>
+      </div>
+      <div class="machine_sources">
+        <div>
+          <>
+            <span>01</span>
+            <strong>Folders & vaults</strong>
+            <small>Only the paths you choose</small>
+          </>
         </div>
-
-        {/* 1. Four Inbound Source Streams */}
-        <div class="architecture-graphic_sources">
-          <div class="architecture-graphic_col_title">Inbound Sources</div>
-          
-          <div class="architecture-graphic_source_node web">
-            <div class="architecture-graphic_node_icon">🌐</div>
-            <div class="architecture-graphic_node_text">
-              <strong>SearXNG Web</strong>
-              <span>Self-hosted meta-search</span>
-            </div>
-            <span class="architecture-graphic_tag">HTTP</span>
-          </div>
-
-          <div class="architecture-graphic_source_node vault">
-            <div class="architecture-graphic_node_icon">💎</div>
-            <div class="architecture-graphic_node_text">
-              <strong>Obsidian Vaults</strong>
-              <span>Wikilinks, tags, markdown</span>
-            </div>
-            <span class="architecture-graphic_tag">BM25</span>
-          </div>
-
-          <div class="architecture-graphic_source_node docs">
-            <div class="architecture-graphic_node_icon">📄</div>
-            <div class="architecture-graphic_node_text">
-              <strong>Local Docs &amp; Code</strong>
-              <span>PDF, Pandoc, codebases</span>
-            </div>
-            <span class="architecture-graphic_tag">Extracted</span>
-          </div>
-
-          <div class="architecture-graphic_source_node history">
-            <div class="architecture-graphic_node_icon">🧭</div>
-            <div class="architecture-graphic_node_text">
-              <strong>Browser History</strong>
-              <span>Opt-in FTS5, stripped tokens</span>
-            </div>
-            <span class="architecture-graphic_tag">Sanitized</span>
-          </div>
+        <div>
+          <>
+            <span>02</span>
+            <strong>Browser history</strong>
+            <small>Only the profiles you select</small>
+          </>
         </div>
-
-        {/* Connector Strands Left */}
-        <svg class="architecture-graphic_strands_left" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-          <path d="M 0,20 C 50,20 50,50 100,50" fill="none" stroke="#F2EFE6" stroke-width="2" stroke-opacity="0.5" stroke-dasharray="3,3" />
-          <path d="M 0,40 C 50,40 50,50 100,50" fill="none" stroke="#F2EFE6" stroke-width="2" stroke-opacity="0.7" />
-          <path d="M 0,60 C 50,60 50,50 100,50" fill="none" stroke="#F2EFE6" stroke-width="2" stroke-opacity="0.7" />
-          <path d="M 0,80 C 50,80 50,50 100,50" fill="none" stroke="#F2EFE6" stroke-width="2" stroke-opacity="0.5" stroke-dasharray="3,3" />
-        </svg>
-
-        {/* 2. Admission & Fusion Engine */}
-        <div class="architecture-graphic_core">
-          <div class="architecture-graphic_core_box">
-            <div class="architecture-graphic_stage_label">STAGE 01</div>
-            <div class="architecture-graphic_core_title">Admission &amp; Fusion</div>
-            <ul class="architecture-graphic_core_specs">
-              <li>Lexical BM25 ranking</li>
-              <li>Optional vector reranking</li>
-              <li>Recency decay &amp; diversity cap</li>
-              <li>Exclusion filters &amp; secret strip</li>
-            </ul>
-            <div class="architecture-graphic_pill">Bounded Evidence Pack</div>
+      </div>
+      <div class="machine_connection" aria-hidden="true">
+        ↓
+      </div>
+      <div class="machine_core">
+        <>
+          <span class="machine_monogram" aria-hidden="true">
+            k/i
+          </span>
+          <div>
+            <>
+              <Heading tag="h3" variant="h4">
+                KeepIndex
+              </Heading>
+              <p>Your index. Your results.</p>
+            </>
           </div>
-        </div>
-
-        {/* Connector Strand Middle */}
-        <svg class="architecture-graphic_strands_mid" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-          <path d="M 0,50 L 100,50" fill="none" stroke="#F2EFE6" stroke-width="3" stroke-linecap="round" />
-        </svg>
-
-        {/* 3. Local Model & Grounding Gate */}
-        <div class="architecture-graphic_inference">
-          <div class="architecture-graphic_inference_box">
-            <div class="architecture-graphic_stage_label">STAGE 02 · LOCAL INFERENCE</div>
-            <div class="architecture-graphic_inference_title">Hardware Provider</div>
-            <div class="architecture-graphic_inference_engines">
-              <span>llama.cpp</span>
-              <span>vLLM</span>
-              <span>Ollama</span>
-              <span>SGLang</span>
-              <span>LM Studio</span>
-              <span>MLX</span>
-            </div>
-            <div class="architecture-graphic_loopback_note">Loopback / RFC1918 / Tailscale only</div>
-
-            <div class="architecture-graphic_gate">
-              <div class="architecture-graphic_gate_header">
-                <span class="architecture-graphic_lock">🛡️</span>
-                <strong>Citation &amp; Grounding Gate</strong>
-              </div>
-              <div class="architecture-graphic_gate_desc">
-                Sentence-level evidence coverage &ge; 80%. Out-of-pack or ungrounded assertions quarantine output to <code>no_evidence</code>.
-              </div>
-            </div>
+          <span class="machine_chip">localhost</span>
+        </>
+      </div>
+      <div class="machine_services">
+        <>
+          <div>
+            <>
+              <strong>Your AI endpoint</strong>
+              <small>Local by default · remote by choice</small>
+            </>
           </div>
-        </div>
-
-        {/* Connector Strand Right (Green evidence strand) */}
-        <svg class="architecture-graphic_strands_right" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-          <path d="M 0,50 L 100,50" fill="none" stroke="#62D66B" stroke-width="3.5" stroke-linecap="round" />
-          <polygon points="98,47 103,50 98,53" fill="#62D66B" />
-        </svg>
-
-        {/* 4. Sovereign Destination */}
-        <div class="architecture-graphic_dest">
-          <div class="architecture-graphic_col_title">Sovereign Output</div>
-          
-          <div class="architecture-graphic_dest_node ground">
-            <div class="architecture-graphic_dest_dot" />
-            <div class="architecture-graphic_node_text">
-              <strong>Grounded Answer</strong>
-              <span>Verifiable inline citations</span>
-            </div>
+          <div>
+            <>
+              <strong>Local SearXNG</strong>
+              <small>Web search when you include it</small>
+            </>
           </div>
-
-          <div class="architecture-graphic_dest_node sqlite">
-            <div class="architecture-graphic_dest_dot" />
-            <div class="architecture-graphic_node_text">
-              <strong>SQLite WAL Record</strong>
-              <span>Durable per-query evidence</span>
-            </div>
-          </div>
-
-          <div class="architecture-graphic_dest_node pwa">
-            <div class="architecture-graphic_dest_dot" />
-            <div class="architecture-graphic_node_text">
-              <strong>Local PWA Interface</strong>
-              <span>Port 5173 · Zero cloud tracking</span>
-            </div>
-          </div>
-        </div>
+        </>
+      </div>
+      <div class="machine_edge">
+        <>
+          <span aria-hidden="true">↗</span>
+          <p>
+            Web searches contact public engines.
+            <>
+              <br />
+              <strong>Remote AI receives evidence when selected.</strong>
+            </>
+          </p>
+        </>
       </div>
     </div>
   )
 }
-
 <style is:global>
   @layer components {
-    .architecture-graphic_wrap {
+    .machine_wrap {
       width: 100%;
-      margin-block: var(--space-4);
-    }
-
-    .architecture-graphic_artboard {
-      container-type: inline-size;
-      aspect-ratio: 16 / 9;
-      position: relative;
-      width: 100%;
-      background-color: #071117;
-      border: var(--border-width) solid color-mix(in lab, #f2efe6 15%, transparent);
+      border: 0.0625rem solid #34443b;
       border-radius: 1rem;
-      overflow: hidden;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 5cqw 3cqw 3cqw;
-      box-shadow: inset 0 0 4cqw rgba(0, 0, 0, 0.7);
-    }
-
-    .architecture-graphic_grid {
-      position: absolute;
-      inset: 0;
-      background-image:
-        radial-gradient(circle at 1cqw 1cqw, rgba(242, 239, 230, 0.07) 0.15cqw, transparent 0.2cqw);
-      background-size: 2.5cqw 2.5cqw;
-      pointer-events: none;
-    }
-
-    .architecture-graphic_header {
-      position: absolute;
-      top: 1.5cqw;
-      inset-inline: 3cqw;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border-bottom: 0.1cqw solid rgba(242, 239, 230, 0.12);
-      padding-bottom: 1cqw;
-    }
-
-    .architecture-graphic_badge {
-      display: flex;
-      align-items: center;
-      gap: 0.8cqw;
-      font-family: var(--font-mono);
-      font-size: 1.15cqw;
-      letter-spacing: 0.08em;
-      color: #62d66b;
-    }
-
-    .architecture-graphic_dot {
-      width: 0.8cqw;
-      height: 0.8cqw;
-      border-radius: 50%;
-      background-color: #62d66b;
-      box-shadow: 0 0 1cqw #62d66b;
-    }
-
-    .architecture-graphic_stat {
-      font-family: var(--font-mono);
-      font-size: 0.95cqw;
-      color: #a7a59b;
-      letter-spacing: 0.05em;
-    }
-
-    .architecture-graphic_col_title {
-      font-family: var(--font-mono);
-      font-size: 1.1cqw;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: #a7a59b;
-      margin-bottom: 0.6cqw;
-    }
-
-    /* Left Source Column */
-    .architecture-graphic_sources {
-      width: 22cqw;
-      display: flex;
-      flex-direction: column;
-      gap: 1cqw;
-      z-index: 2;
-    }
-
-    .architecture-graphic_source_node {
-      display: flex;
-      align-items: center;
-      gap: 1cqw;
-      background-color: rgba(15, 28, 36, 0.85);
-      border: 0.12cqw solid rgba(242, 239, 230, 0.12);
-      border-radius: 0.8cqw;
-      padding: 0.8cqw 1cqw;
-      transition: border-color 0.2s ease, transform 0.2s ease;
-    }
-
-    .architecture-graphic_node_icon {
-      font-size: 1.6cqw;
-      flex-shrink: 0;
-    }
-
-    .architecture-graphic_node_text {
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-      min-width: 0;
-    }
-
-    .architecture-graphic_node_text strong {
-      font-size: 1.15cqw;
-      font-family: var(--display-family);
+      padding: 1.5rem;
+      background: #0e1a19;
       color: #f2efe6;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .architecture-graphic_node_text span {
-      font-size: 0.9cqw;
-      color: #a7a59b;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .architecture-graphic_tag {
-      font-family: var(--font-mono);
-      font-size: 0.8cqw;
-      background-color: rgba(242, 239, 230, 0.08);
-      border-radius: 0.4cqw;
-      padding: 0.2cqw 0.5cqw;
-      color: #a7a59b;
-    }
-
-    /* Strands */
-    .architecture-graphic_strands_left {
-      width: 4cqw;
-      height: 28cqw;
-      z-index: 1;
-    }
-
-    /* Stage 1: Fusion Box */
-    .architecture-graphic_core {
-      width: 21cqw;
-      z-index: 2;
-    }
-
-    .architecture-graphic_core_box {
-      background-color: rgba(25, 39, 50, 0.9);
-      border: 0.12cqw solid rgba(242, 239, 230, 0.2);
-      border-radius: 1cqw;
-      padding: 1.4cqw;
-      display: flex;
-      flex-direction: column;
-      gap: 0.8cqw;
-    }
-
-    .architecture-graphic_stage_label {
-      font-family: var(--font-mono);
-      font-size: 0.85cqw;
-      color: #62d66b;
-      letter-spacing: 0.08em;
-    }
-
-    .architecture-graphic_core_title {
-      font-size: 1.4cqw;
-      font-family: var(--display-family);
-      font-weight: 700;
-      color: #f2efe6;
-    }
-
-    .architecture-graphic_core_specs {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 0.4cqw;
-      font-size: 0.95cqw;
-      color: #a7a59b;
-    }
-
-    .architecture-graphic_core_specs li {
-      display: flex;
-      align-items: center;
-      gap: 0.5cqw;
-    }
-
-    .architecture-graphic_core_specs li::before {
-      content: "•";
-      color: #62d66b;
-      font-size: 1.2cqw;
-    }
-
-    .architecture-graphic_pill {
-      margin-top: 0.5cqw;
-      background-color: rgba(98, 214, 107, 0.12);
-      border: 0.1cqw solid rgba(98, 214, 107, 0.35);
-      border-radius: 0.5cqw;
-      padding: 0.5cqw 0.8cqw;
-      font-family: var(--font-mono);
-      font-size: 0.9cqw;
-      color: #62d66b;
-      text-align: center;
-    }
-
-    /* Strands Mid */
-    .architecture-graphic_strands_mid {
-      width: 3cqw;
-      height: 4cqw;
-      z-index: 1;
-    }
-
-    /* Stage 2: Local Model & Grounding Gate */
-    .architecture-graphic_inference {
-      width: 25cqw;
-      z-index: 2;
-    }
-
-    .architecture-graphic_inference_box {
-      background-color: rgba(15, 28, 36, 0.95);
-      border: 0.12cqw solid rgba(242, 239, 230, 0.22);
-      border-radius: 1cqw;
-      padding: 1.4cqw;
-      display: flex;
-      flex-direction: column;
-      gap: 0.8cqw;
-    }
-
-    .architecture-graphic_inference_title {
-      font-size: 1.4cqw;
-      font-family: var(--display-family);
-      font-weight: 700;
-      color: #f2efe6;
-    }
-
-    .architecture-graphic_inference_engines {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.4cqw;
-    }
-
-    .architecture-graphic_inference_engines span {
-      background-color: rgba(242, 239, 230, 0.08);
-      border-radius: 0.4cqw;
-      padding: 0.2cqw 0.5cqw;
-      font-family: var(--font-mono);
-      font-size: 0.8cqw;
-      color: #f2efe6;
-    }
-
-    .architecture-graphic_loopback_note {
-      font-family: var(--font-mono);
-      font-size: 0.8cqw;
-      color: #a7a59b;
-    }
-
-    .architecture-graphic_gate {
-      background-color: rgba(98, 214, 107, 0.08);
-      border: 0.1cqw solid rgba(98, 214, 107, 0.3);
-      border-radius: 0.6cqw;
-      padding: 0.8cqw;
-      display: flex;
-      flex-direction: column;
-      gap: 0.4cqw;
-    }
-
-    .architecture-graphic_gate_header {
-      display: flex;
-      align-items: center;
-      gap: 0.5cqw;
-      font-size: 1cqw;
-      color: #62d66b;
-      font-family: var(--display-family);
-    }
-
-    .architecture-graphic_lock {
-      font-size: 1.2cqw;
-    }
-
-    .architecture-graphic_gate_desc {
-      font-size: 0.85cqw;
-      color: #a7a59b;
-      line-height: 1.3;
-    }
-
-    .architecture-graphic_gate_desc code {
-      font-family: var(--font-mono);
-      color: #f2efe6;
-    }
-
-    /* Strands Right */
-    .architecture-graphic_strands_right {
-      width: 3cqw;
-      height: 4cqw;
-      z-index: 1;
-    }
-
-    /* Right Destination Column */
-    .architecture-graphic_dest {
-      width: 18cqw;
-      display: flex;
-      flex-direction: column;
-      gap: 1.2cqw;
-      z-index: 2;
-    }
-
-    .architecture-graphic_dest_node {
-      display: flex;
-      align-items: center;
-      gap: 0.8cqw;
-      background-color: rgba(15, 28, 36, 0.85);
-      border: 0.12cqw solid rgba(98, 214, 107, 0.25);
-      border-radius: 0.8cqw;
-      padding: 0.9cqw 1cqw;
-    }
-
-    .architecture-graphic_dest_dot {
-      width: 0.8cqw;
-      height: 0.8cqw;
-      border-radius: 50%;
-      background-color: #62d66b;
-      flex-shrink: 0;
-      box-shadow: 0 0 0.8cqw #62d66b;
+      box-shadow: 0 2rem 5rem #0003;
+      .machine_label {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        font-size: 0.8rem;
+        margin-bottom: 2rem;
+      }
+      .machine_indicator {
+        width: 0.45rem;
+        height: 0.45rem;
+        border-radius: 50%;
+        background: #62d66b;
+      }
+      .machine_status {
+        margin-left: auto;
+        color: #a7b4ab;
+        font-size: 0.7rem;
+      }
+      .machine_sources,
+      .machine_services {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+      }
+      .machine_sources > div {
+        padding: 1rem;
+        border: 0.0625rem solid #34443b;
+        border-radius: 0.4rem;
+      }
+      .machine_sources span {
+        display: block;
+        font-family: monospace;
+        font-size: 0.7rem;
+        color: #62d66b;
+        margin-bottom: 0.75rem;
+      }
+      strong {
+        display: block;
+        font-weight: 550;
+        font-size: 0.95rem;
+      }
+      small {
+        display: block;
+        margin-top: 0.4rem;
+        color: #a7b4ab;
+        font-size: 0.75rem;
+        line-height: 1.5;
+      }
+      .machine_connection {
+        text-align: center;
+        color: #62d66b;
+        font-size: 1.75rem;
+        padding: 0.45rem;
+      }
+      .machine_core {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1.25rem;
+        border: 0.0625rem solid #62d66b;
+        border-radius: 0.4rem;
+        background: #62d66b0a;
+      }
+      .machine_core p {
+        font-size: 0.8rem;
+        color: #a7b4ab;
+        margin-top: 0.25rem;
+      }
+      .machine_monogram {
+        font-size: 2.25rem;
+        letter-spacing: -0.12em;
+        font-weight: 650;
+        color: #62d66b;
+        padding-right: 0.5rem;
+      }
+      .machine_chip {
+        margin-left: auto;
+        padding: 0.3rem 0.5rem;
+        color: #62d66b;
+        border: 0.0625rem solid #62d66b55;
+        border-radius: 0.2rem;
+        font-family: monospace;
+        font-size: 0.65rem;
+      }
+      .machine_services {
+        margin: 1.25rem 0 1.75rem;
+      }
+      .machine_services > div {
+        border-left: 0.0625rem solid #546457;
+        padding-left: 1rem;
+      }
+      .machine_edge {
+        display: flex;
+        gap: 1rem;
+        padding-top: 1.25rem;
+        border-top: 0.0625rem dashed #34443b;
+        color: #a7b4ab;
+        font-size: 0.75rem;
+        line-height: 1.6;
+      }
+      .machine_edge > span {
+        font-size: 1.5rem;
+        color: #62d66b;
+      }
+      .machine_edge strong {
+        font-size: inherit;
+        color: #f2efe6;
+      }
+      @media (width < 30rem) {
+        padding: 1rem;
+        .machine_status {
+          display: none;
+        }
+        .machine_sources {
+          gap: 0.5rem;
+        }
+        .machine_sources > div {
+          padding: 0.75rem;
+        }
+        .machine_chip {
+          display: none;
+        }
+      }
     }
   }
 </style>

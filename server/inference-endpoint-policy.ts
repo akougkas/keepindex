@@ -1,13 +1,4 @@
-import { isIP } from 'node:net'
 import type { Environment } from './environment'
-
-const LOCAL_HOST_SUFFIXES = ['.localhost', '.local', '.lan', '.internal', '.home.arpa'] as const
-const KNOWN_CLOUD_HOST_SUFFIXES = [
-  'openai.com',
-  'anthropic.com',
-  'googleapis.com',
-  'google.com',
-] as const
 
 export type InferenceProviderRequest = 'auto' | 'openai-compatible' | 'ollama'
 
@@ -62,58 +53,10 @@ export type InferenceEndpointDecision =
         | 'unsupported-protocol'
         | 'credentials-forbidden'
         | 'query-or-fragment-forbidden'
-        | 'known-cloud-host'
-        | 'public-host-forbidden'
     }
 
-function hostnameWithoutBrackets(hostname: string): string {
-  return hostname.replace(/^\[|\]$/g, '').toLowerCase().replace(/\.$/, '')
-}
-
-function isLocalOrSharedIpv4(hostname: string): boolean {
-  const octets = hostname.split('.').map(Number)
-  if (octets.length !== 4 || octets.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
-    return false
-  }
-  const [first, second] = octets
-  return first === 127
-    || first === 10
-    || (first === 172 && second! >= 16 && second! <= 31)
-    || (first === 192 && second === 168)
-    // RFC 6598 shared address space used by local Tailscale peers.
-    || (first === 100 && second! >= 64 && second! <= 127)
-}
-
-function isLocalIpv6(hostname: string): boolean {
-  if (hostname === '::1') return true
-  const firstHextet = Number.parseInt(hostname.split(':', 1)[0] ?? '', 16)
-  if (!Number.isFinite(firstHextet)) return false
-  // fc00::/7 (unique local) and fe80::/10 (link-local).
-  return (firstHextet & 0xfe00) === 0xfc00 || (firstHextet & 0xffc0) === 0xfe80
-}
-
-function matchesHostOrSubdomain(hostname: string, suffix: string): boolean {
-  return hostname === suffix || hostname.endsWith(`.${suffix}`)
-}
-
-function isKnownCloudHost(hostname: string): boolean {
-  return KNOWN_CLOUD_HOST_SUFFIXES.some((suffix) => matchesHostOrSubdomain(hostname, suffix))
-}
-
-function isAllowedLocalHostname(hostname: string): boolean {
-  const ipVersion = isIP(hostname)
-  if (ipVersion === 4) return isLocalOrSharedIpv4(hostname)
-  if (ipVersion === 6) return isLocalIpv6(hostname)
-  if (hostname === 'host.docker.internal') return true
-  if (!hostname.includes('.')) return true
-  return LOCAL_HOST_SUFFIXES.some((suffix) => hostname.endsWith(suffix))
-}
-
-/**
- * Pure, DNS-free policy for the inference base URL. KeepIndex deliberately
- * permits only address forms whose names themselves establish local scope,
- * including RFC 6598 addresses used by Tailscale peers. Public DNS names are
- * never resolved and then trusted after the fact.
+/** Validate a user-configured inference URL without restricting the provider location.
+ * Endpoint selection is explicit; redirects and credentials in URLs stay forbidden.
  */
 export function inspectInferenceEndpoint(input: string): InferenceEndpointDecision {
   let endpoint: URL
@@ -133,27 +76,21 @@ export function inspectInferenceEndpoint(input: string): InferenceEndpointDecisi
     return { allowed: false, reason: 'query-or-fragment-forbidden' }
   }
 
-  const absoluteSingleLabel = endpoint.hostname.endsWith('.')
-    && !hostnameWithoutBrackets(endpoint.hostname).includes('.')
-  const hostname = hostnameWithoutBrackets(endpoint.hostname)
-  if (isKnownCloudHost(hostname)) return { allowed: false, reason: 'known-cloud-host' }
-  if (absoluteSingleLabel) return { allowed: false, reason: 'public-host-forbidden' }
-  if (!isAllowedLocalHostname(hostname)) return { allowed: false, reason: 'public-host-forbidden' }
-
+  const hostname = endpoint.hostname
   const pathname = endpoint.pathname === '/'
     ? ''
     : endpoint.pathname.replace(/\/+$/, '')
   return { allowed: true, url: `${endpoint.origin}${pathname}`, hostname }
 }
 
-export function requireLocalInferenceEndpoint(input: string): string {
+export function requireInferenceEndpoint(input: string): string {
   const decision = inspectInferenceEndpoint(input)
   if (decision.allowed) return decision.url
   // Deliberately omit the configured value: it may contain sensitive material
   // even though embedded credentials are rejected above.
   throw new Error(
-    `LLM_URL must identify a local inference server (${decision.reason}). `
-    + 'Use loopback, RFC1918/Tailscale addressing, or a local/container hostname.'
+    `Inference endpoint must be a valid HTTP(S) URL (${decision.reason}). `
+    + 'Set authentication with an API key, not in the URL.'
   )
 }
 

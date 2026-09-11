@@ -13,7 +13,7 @@ FROM oven/bun:1.3.10-debian AS runtime
 WORKDIR /app
 
 LABEL org.opencontainers.image.title="KeepIndex" \
-      org.opencontainers.image.description="Private, local-first federated search." \
+      org.opencontainers.image.description="Private search on your computer. Your choice of AI." \
       org.opencontainers.image.source="https://github.com/akougkas/keepindex" \
       org.opencontainers.image.url="https://keepindex.ing" \
       org.opencontainers.image.version="1.1.0" \
@@ -35,6 +35,7 @@ RUN mkdir -p /data /home/keepindex/documents \
   && chown -R bun:bun /data /home/keepindex
 
 ENV NODE_ENV=production \
+    KEEPINDEX_CONTAINER=1 \
     PORT=5173 \
     KEEPINDEX_DB_PATH=/data/keepindex.sqlite
 

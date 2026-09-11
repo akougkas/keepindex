@@ -221,7 +221,7 @@ const socialPromiseTwo = outlinedText({
   fill: COLORS.green, letterSpacing: -5.5,
 }).svg
 const socialDescriptor = outlinedText({
-  text: 'Private, local-first federated search.', font: fonts.interface500, size: 24, x: 70, y: 544,
+  text: 'Private search on your computer. Your choice of AI.', font: fonts.interface500, size: 24, x: 70, y: 544,
   fill: COLORS.stone,
 }).svg
 const socialDomain = outlinedSegments({
@@ -274,7 +274,7 @@ const outputs = new Map([
   ['assets/brand/social-card.svg', svgDocument({
     viewBox: '0 0 1200 630',
     title: 'KeepIndex — Search your world. Keep it yours.',
-    description: 'Social card for private, local-first federated search.',
+    description: 'Social card for private search on your computer with your choice of AI.',
     body: `<defs>
     <radialGradient id="glow" cx="84%" cy="12%" r="76%"><stop offset="0" stop-color="#173925" stop-opacity=".62"/><stop offset=".56" stop-color="${COLORS.ink}" stop-opacity="0"/></radialGradient>
     <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse"><path d="M48 0H0v48" fill="none" stroke="${COLORS.ivory}" stroke-opacity=".035"/></pattern>
