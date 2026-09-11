@@ -2716,10 +2716,31 @@ function localChunkMatchesOptions(chunk: KnowledgeChunk, options: LocalSearchOpt
   const metadataText = [
     ...(chunk.metadata?.aliases ?? []),
     ...(chunk.metadata?.tags ?? []),
-  ].join('\n')
-  const haystack = `${chunk.fileName}\n${chunk.filePath}\n${metadataText}\n${chunk.searchContent ?? chunk.content}`.toLowerCase()
-  if (options.phrases?.some((phrase) => !haystack.includes(phrase))) return false
-  if (options.excludedTerms?.some((term) => haystack.includes(term))) return false
+  ].join(' ')
+
+  if (options.phrases?.length) {
+    const collapsedContent = `${chunk.fileName} ${metadataText} ${chunk.searchContent ?? chunk.content}`
+      .replace(/\s+/g, ' ')
+      .toLowerCase()
+    if (options.phrases.some((phrase) => !collapsedContent.includes(phrase.replace(/\s+/g, ' ').toLowerCase()))) {
+      return false
+    }
+  }
+
+  if (options.excludedTerms?.length) {
+    const termFreqs = chunk.termFreqs
+    const fallbackTokens = termFreqs
+      ? null
+      : new Set(tokenizeSearchTerms(`${chunk.fileName} ${metadataText} ${chunk.searchContent ?? chunk.content}`))
+    const hasTerm = (term: string): boolean => {
+      const normalized = term.toLowerCase()
+      if (termFreqs) {
+        return (termFreqs.get(normalized) ?? 0) > 0 || (chunk.nameTokens?.has(normalized) ?? false)
+      }
+      return fallbackTokens!.has(normalized)
+    }
+    if (options.excludedTerms.some((term) => hasTerm(term))) return false
+  }
   return true
 }
 
@@ -3046,9 +3067,10 @@ function searchKnowledge(q: string, limit = 10, inheritedOptions: LocalSearchOpt
       ...(ch.metadata?.outgoingLinks ?? []),
     ].join(' ').toLowerCase()
     const metadataHits = queryTokens.filter((token) => tokenizeSearchTerms(metadataText).includes(token)).length
-    const requiredPhraseHit = (options.phrases ?? []).some((phrase) =>
-      `${ch.fileName}\n${ch.searchContent ?? ch.content}`.toLowerCase().includes(phrase)
-    )
+    const requiredPhraseHit = (options.phrases ?? []).some((phrase) => {
+      const collapsed = `${ch.fileName} ${ch.searchContent ?? ch.content}`.replace(/\s+/g, ' ').toLowerCase()
+      return collapsed.includes(phrase.replace(/\s+/g, ' ').toLowerCase())
+    })
     const boostMultiplier =
       1 +
       0.45 * (nameHits / tokenCount) +
