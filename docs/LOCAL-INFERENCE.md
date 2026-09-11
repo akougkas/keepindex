@@ -27,6 +27,16 @@ A remote connection is labeled **Remote** in Settings and beside the query box. 
 
 Model fallback, when configured, stays within the selected endpoint. KeepIndex never silently switches from local AI to a remote connection. Requests already running stay pinned to their original connection and credentials while you change the endpoint for later requests.
 
+An advertised model is a catalog entry, not a successful inference test. If an endpoint reports a model-load failure or an unsupported model architecture, KeepIndex stops that inference call and explains the failure. It does not retry the failed load or substitute the configured fallback model. Backend logs and local cache paths are not included in the public error. A later request can try again after you repair the runtime.
+
+## DiffusionGemma compatibility
+
+As tested on ZBook on September 11, 2026, **Lemonade 11.9.0 cannot serve the installed DiffusionGemma GGUF through its current llama.cpp backend**. Its public chat API returns HTTP 500 with `model_load_error`. Its bundled ROCm `llama-diffusion-cli` also rejects the weights with `unknown model architecture: 'diffusion-gemma'`. That binary's name does not establish support for this particular diffusion architecture. The existing weights are present; another download or a different KeepIndex URL does not repair the runtime.
+
+DiffusionGemma generates blocks of tokens through a diffusion process. It needs explicit runtime support beyond ordinary Gemma 4 autoregressive inference. The [Unsloth model card](https://huggingface.co/unsloth/diffusiongemma-26B-A4B-it-GGUF) documents a dedicated diffusion runner from [llama.cpp PR #24423](https://github.com/ggml-org/llama.cpp/pull/24423). At the time of testing, that work and the [separate experimental HTTP server in PR #24427](https://github.com/ggml-org/llama.cpp/pull/24427) remain unmerged. [Lemonade issue #2531](https://github.com/lemonade-sdk/lemonade/issues/2531) tracks the model-load problem; [PR #2179](https://github.com/lemonade-sdk/lemonade/pull/2179) adds a model catalog entry rather than a diffusion inference backend.
+
+KeepIndex can connect to a diffusion-capable service if it provides the required OpenAI-compatible chat API and model catalog. Such a service still needs verification on the host GPU, including streaming and source-grounded answers. Do not replace Lemonade's working backend binaries with experimental builds or describe a catalog-only import as working inference. Existing local Gemma models remain available through Lemonade while native support develops.
+
 ## Credentials and persistence
 
 Connections and the selected model persist in `ai-connections.json` alongside the local database (`/data/ai-connections.json` in Docker). The file is written with owner-only permissions and is excluded from Git and image build contexts. Keys are never returned through the connection-list API or saved in browser storage. Changing an endpoint URL does not automatically transfer the previous URL's key.

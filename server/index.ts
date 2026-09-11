@@ -1,5 +1,6 @@
 import { unsupportedEvidenceLiterals, liveReleaseMismatch, releaseSourceExcerpts } from './evidence-validation'
 import { readCurrentProjectEvidence } from './project-evidence'
+import { InferenceModelLoadError, readModelLoadFailure } from './inference-failure'
 import { AiConnections, describeAiConnection, aiConnectionsPath, defaultAiConnections, type ConnectionModel, type AiConnectionConfig } from './ai-connections'
 import { permitsLocalApiRequest, requireLocalSearchEndpoint } from './local-service-policy'
 import { Hono, type Context } from 'hono'
@@ -986,8 +987,11 @@ async function fetchLlmChatCompletions(
           retainCleanupUntilBodyConsumed = true
           return response
         }
+        const modelLoadFailure = await readModelLoadFailure(response, candidateModel)
+        if (modelLoadFailure) throw modelLoadFailure
         if (!isRetryableLlmStatus(response.status)) break
       } catch (error) {
+        if (error instanceof InferenceModelLoadError) throw error
         lastError = error
         if (options.signal.aborted) throw error
       } finally {
@@ -5279,7 +5283,7 @@ ${generationPolicy.compactContext ? 'Compact-model policy: answer narrowly, avoi
         })
         await stream.writeSSE({
           event: 'message',
-          data: JSON.stringify({ type: 'error', data: ENGINE_UNAVAILABLE_MESSAGE, requestId }),
+          data: JSON.stringify({ type: 'error', data: err instanceof InferenceModelLoadError ? err.message : ENGINE_UNAVAILABLE_MESSAGE, requestId }),
         })
       }
     } finally {
@@ -6282,9 +6286,10 @@ ${webSection}${localSection}
             error: err instanceof Error ? err.message : ENGINE_UNAVAILABLE_MESSAGE,
             metadata: { retrievalDiagnostics },
           })
-          const publicError = err instanceof IncompleteLlmStreamError && !answerText.trim()
-            ? 'The model used its response budget without producing an answer. KeepIndex stopped instead of returning an empty result; please retry or choose a non-reasoning model.'
-            : ENGINE_UNAVAILABLE_MESSAGE
+          const publicError = err instanceof InferenceModelLoadError ? err.message
+            : err instanceof IncompleteLlmStreamError && !answerText.trim()
+              ? 'The model used its response budget without producing an answer. KeepIndex stopped instead of returning an empty result; please retry or choose a non-reasoning model.'
+              : ENGINE_UNAVAILABLE_MESSAGE
           await stream.writeSSE({
             event: 'message',
             data: JSON.stringify(
