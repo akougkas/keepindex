@@ -4886,7 +4886,14 @@ async function handleFederatedSearch(c: Context, input: {
       return c.json({ requestId: input.requestId, error: 'request aborted' }, 408)
     }
 
-    const publicWeb = [...run.webResults, ...run.historyResults].map(toSearchApiResult)
+    const selectedWebUrls = new Set(
+      run.fused.results
+        .filter((result) => result.kind === 'web' || result.kind === 'history')
+        .map((result) => canonicalizeUrl(result.url))
+    )
+    const publicWeb = [...run.webResults, ...run.historyResults]
+      .filter((result) => selectedWebUrls.has(canonicalizeUrl(result.url)))
+      .map(toSearchApiResult)
     const selectedLocalIds = new Set(
       run.fused.results.filter((result) => result.filePath).map((result) => result.id)
     )

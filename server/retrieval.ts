@@ -916,15 +916,16 @@ export function rankWebResults(
   hostPreferences?: HostPreferences
 ): RankedResult[] {
   const deduped = dedupeWebResults(results)
-
   for (const result of deduped) {
+    const isHistory = result.sourceType === 'history'
     // A missing rank is treated as the tail of a 10-result page rather than as
     // rank 1, so results from engines that omit ordering do not win by default.
-    const rank = result.rank ?? 10
-    const prior = 1 / (1 + Math.max(0, rank - 1))
+    // History candidates have no search-engine rank prior, agreement, or recency bonus.
+    const rank = isHistory ? 10 : (result.rank ?? 10)
+    const prior = isHistory ? 0 : 1 / (1 + Math.max(0, rank - 1))
     const quality = domainQuality(result.url)
-    const agreement = engineAgreement(result)
-    const recency = recencyScore(result.publishedDate, nowMs)
+    const agreement = isHistory ? 0 : engineAgreement(result)
+    const recency = isHistory ? 0 : recencyScore(result.publishedDate, nowMs)
     const preference = hostPreferenceScore(result.url, hostPreferences)
     const rankingQueries = mergeRankingQueries(
       deriveRankingQueries(query),

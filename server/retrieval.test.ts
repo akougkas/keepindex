@@ -536,6 +536,30 @@ describe('rankWebResults', () => {
     expect(ranked[0].url).toBe('https://sqlite.org/wal.html')
   })
 
+  it('neutralizes recency bonus and rank prior for history results (KIX-04)', () => {
+    const webResult = result({
+      url: 'https://docs.example.com/topic',
+      title: 'Documentation on topic',
+      snippet: 'Guide to topic and architecture.',
+      rank: 1,
+      publishedDate: new Date(NOW).toISOString(),
+      sourceType: 'web',
+    })
+    const historyResult = result({
+      url: 'https://history.example.com/topic',
+      title: 'Documentation on topic',
+      snippet: 'Guide to topic and architecture.',
+      rank: 1,
+      publishedDate: new Date(NOW).toISOString(),
+      sourceType: 'history',
+    })
+    const ranked = rankWebResults('topic', [webResult, historyResult], NOW)
+    const rankedWeb = ranked.find((r) => r.url === webResult.url)!
+    const rankedHistory = ranked.find((r) => r.url === historyResult.url)!
+
+    expect(rankedWeb.relevanceScore).toBeGreaterThan(rankedHistory.relevanceScore)
+  })
+
   it('is order-independent: shuffled input yields the same ranking', () => {
     const input = [
       result({ url: 'https://a.example.com/1', title: 'alpha topic', snippet: 'alpha', rank: 1 }),
