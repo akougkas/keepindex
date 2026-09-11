@@ -11,7 +11,29 @@ tracking. Allocate identifiers sequentially and never recycle one.
 `LIVE` marks work that needs the deferred live evaluation pass to size or decide.
 See `docs/RETRIEVAL-HARDENING-2026-08-29.md` for what was already fixed.
 
-## Ship next
+## Delivered in v1.1.0
+
+The following verified hardening milestones have been delivered, tested, and validated on the `dev/v1.1.0` release line:
+
+- **KIX-01 · Absolute Local Evidence Admission**: Prevents irrelevant vault chunk admission via combined absolute BM25 score and query coverage signals.
+- **KIX-02 · Lexical Support Gating for Citation Repair**: Verifies claim-to-source lexical support before accepting newly introduced citations in post-generation repair.
+- **KIX-03 · Compact File Paths & Metadata-Only Exclusions**: Excludes metadata-only stubs from citable evidence packs and strips home directories from file paths.
+- **KIX-04 & KIX-17 · Browser-History Recency & Ledger Scoping**: Neutralized synthetic recency bonus for history items and restricted persisted query ledger to actually selected sources.
+- **KIX-06 & KIX-07 · Weighted Stream Allocation & Diversity Backfill**: Configurable fusion weights (`webWeight`, `localWeight`) with two-tier diversity preservation.
+- **KIX-08 · Token-Bounded Exclusion & Path-Isolated Phrases**: Replaced substring exclusion with whole-token matching and isolated phrase matching from directory paths.
+- **KIX-09 · Parse-Free Query Expansion**: Split `searchKnowledge` and `searchKnowledgeCore` so internal subqueries and aspect expansions bypass operator re-parsing.
+- **KIX-10, KIX-11 & KIX-12 · Query Pinning & Expansion Sizing**: Pinned original query in multi-aspect ranking and decoupled semantic pack sizing from discovery query length.
+- **KIX-13 · Accurate Skipped Web Diagnostics**: Sets `web.state: 'skipped'` when `target=vault` instead of reporting spurious timeout or provider failure.
+- **KIX-14 · Request-Scoped Model Fallback & Deadline Timeouts**: Bounded LLM retries to request deadline without permanently mutating global default model state.
+- **KIX-20 · Truncated Completion Grading**: Retains `truncated: true` flag and persists grounding diagnostics on length finish.
+- **KIX-21 · Discriminator Statuses for Follow-ups & Takeaways**: Surfaces `{ status: 'ok' | 'unavailable' | 'skipped' }` telemetry for downstream panels.
+- **KIX-22 · Citation Coordinate & Namespace Hardening**: Formatted local coordinates as `(lines 118-140)` and propagated leading `L` namespace across grouped brackets (`[L1, 2]` -> `['L1', 'L2']`).
+- **KIX-23 · Directory & Store Exclusions**: Default exclusions for `repomix-output`, `__NUKED`, `experiment-results`, `lancedb`, `chroma`, etc., plus per-resource exclude patterns.
+- **Modern Windows WSL UNC Paths**: Full support for `\\wsl.localhost\...` alongside `\\wsl$\...` in path resolver.
+- **Frontend Ergonomics & Shortcuts**: Added quick mode switcher (`Alt+1/2/3/4`), target cycle (`Alt+T`), quick copy (`Cmd+Alt+C`), shortcut palette (`?`), vault count pill in answer metadata, and Command Palette shortcuts.
+- **Stress-Tested Against Real Corpora**: Tested against real 15,800+ chunk Obsidian vault (`vaultex`) and multi-directory code garden (`knowledge_garden`).
+
+## Planned Future Work
 
 ### KIX-01 · Local evidence admission is batch-relative, so an irrelevant vault always contributes a cited chunk
 **critical · medium effort · retrieval quality**

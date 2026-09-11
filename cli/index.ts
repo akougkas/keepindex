@@ -9,7 +9,7 @@ import {
   type InferenceAdapter,
 } from '../server/inference-endpoint-policy'
 
-export const KEEPINDEX_VERSION = '1.0.0'
+export const KEEPINDEX_VERSION = '1.1.0'
 export const DEFAULT_KEEPINDEX_URL = 'http://localhost:5173'
 export const DEFAULT_SEARXNG_URL = 'http://127.0.0.1:8888'
 export const DEFAULT_LLM_URL = 'http://127.0.0.1:8080'

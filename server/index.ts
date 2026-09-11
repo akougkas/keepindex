@@ -493,11 +493,11 @@ function invalidateCollectionHostPreferences(): void {
 function toWslPath(inputPath: string): string {
   const raw = inputPath.trim()
 
-  // Windows UNC path to WSL distro: \\wsl$\Distro\home\user\vault -> /home/user/vault
-  if (raw.startsWith('\\\\wsl$\\')) {
+  // Windows UNC path to WSL distro: \\wsl$\Distro\home\... or \\wsl.localhost\Distro\home\...
+  if (/^[\\/]{2}wsl(?:\$|\.localhost)[\\/]/i.test(raw)) {
     const normalized = raw.replace(/\\/g, '/')
-    const parts = normalized.split('/')
-    if (parts.length >= 5) return '/' + parts.slice(4).join('/')
+    const parts = normalized.split('/').filter(Boolean)
+    if (parts.length >= 3) return '/' + parts.slice(2).join('/')
   }
 
   // Windows drive path: C:\Users\name\vault or C:/Users/name/vault -> /mnt/c/Users/name/vault
@@ -2469,6 +2469,7 @@ export const DEFAULT_EXCLUDED_DIRECTORIES = new Set([
   '.next', 'next', '.nuxt', 'nuxt', '.output', 'output', 'target',
   'bin', 'obj', '.pytest_cache', '.mypy_cache', '.ruff_cache',
   '.yarn', '.pnpm', 'tmp', 'temp',
+  'lancedb', '.lancedb', 'chroma', '.chroma',
 ])
 
 function metadataFallback(fullPath: string, fileName: string, size: number, modifiedAt: number, obsidianRoot: boolean): {

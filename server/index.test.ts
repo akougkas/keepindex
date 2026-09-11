@@ -11,6 +11,9 @@ describe('path normalization and safety', () => {
 
   it('converts WSL UNC paths', () => {
     expect(__test__.toWslPath('\\\\wsl$\\Ubuntu\\home\\user\\vault')).toBe('/home/user/vault')
+    expect(__test__.toWslPath('\\\\wsl.localhost\\Ubuntu-24.04\\home\\akougkas\\knowledge_garden')).toBe(
+      '/home/akougkas/knowledge_garden'
+    )
   })
 
   it('allows only subpaths under /home or /mnt', () => {

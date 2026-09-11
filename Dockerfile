@@ -16,7 +16,7 @@ LABEL org.opencontainers.image.title="KeepIndex" \
       org.opencontainers.image.description="Private, local-first federated search." \
       org.opencontainers.image.source="https://github.com/akougkas/keepindex" \
       org.opencontainers.image.url="https://keepindex.ing" \
-      org.opencontainers.image.version="1.0.0" \
+      org.opencontainers.image.version="1.1.0" \
       org.opencontainers.image.licenses="Apache-2.0"
 
 # Local document extraction remains useful in the container: PDF extraction
