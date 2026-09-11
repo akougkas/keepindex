@@ -259,5 +259,23 @@ describe('token-bounded exclusion and path-isolated phrase semantics (KIX-08)', 
     const results = __test__.searchKnowledge('"user guides"', 10)
     expect(results).toHaveLength(0)
   })
+
+  test('searchKnowledgeAcrossQueries invokes searchKnowledgeCore directly without re-parsing operators (KIX-09)', () => {
+    const note = chunk(
+      '/home/synthetic/vault/notes/operator-query.md',
+      'Discussion about tag:protocol syntax and -negation operator behaviors in search queries.',
+      { sourceKind: 'note', extension: '.md' }
+    )
+    __test__.setKnowledgeIndex([note])
+
+    // Under searchKnowledge, "tag:protocol" would be parsed away into an options filter and query becomes empty
+    const directResults = __test__.searchKnowledgeCore('tag:protocol', 10)
+    expect(directResults).toHaveLength(1)
+    expect(directResults[0].fileName).toBe('operator-query.md')
+
+    const acrossResults = __test__.searchKnowledgeAcrossQueries(['tag:protocol', 'syntax'], 10)
+    expect(acrossResults).toHaveLength(1)
+    expect(acrossResults[0].fileName).toBe('operator-query.md')
+  })
 })
 

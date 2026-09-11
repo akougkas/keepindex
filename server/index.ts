@@ -3,7 +3,7 @@ import { bodyLimit } from 'hono/body-limit'
 import { cors } from 'hono/cors'
 import { streamSSE } from 'hono/streaming'
 import { readdir, readFile, stat, realpath, mkdir, writeFile } from 'node:fs/promises'
-import { basename, extname, join, resolve } from 'node:path'
+import { basename, extname, join, relative, resolve } from 'node:path'
 import {
   beginQueryRecord,
   clearBrowserHistory,
@@ -589,7 +589,7 @@ function formatLocalSourcesForPrompt(
   if (citable.length === 0) return ''
   return `\n\nLocal Knowledge:\n${citable
     .map((r, i) => {
-      const lineTag = r.startLine ? ` (L${r.startLine}${r.endLine && r.endLine !== r.startLine ? `-${r.endLine}` : ''})` : ''
+      const lineTag = r.startLine ? ` (lines ${r.startLine}${r.endLine && r.endLine !== r.startLine ? `-${r.endLine}` : ''})` : ''
       return `[L${i + 1}] ${truncateText(r.fileName || basename(r.filePath), 100)} @ ${compactFilePath(r.filePath)}${lineTag} — ${truncateText(r.content, MAX_LOCAL_SNIPPET_CHARS)}`
     })
     .join('\n\n')}`
@@ -975,10 +975,17 @@ async function fetchLlmChatCompletions(
   const candidates = Array.from(new Set([requestedModel, DEFAULT_MODEL, FALLBACK_MODEL].filter(Boolean)))
   let lastResponse: Response | null = null
   let lastError: unknown = null
+  const deadline = Date.now() + timeoutMs
 
   for (const candidateModel of candidates) {
     for (let attempt = 0; attempt <= retries; attempt++) {
-      const { signal, cleanup } = createTimeoutSignal(options.signal, timeoutMs)
+      const remainingMs = deadline - Date.now()
+      if (remainingMs <= 0) {
+        throw lastError instanceof Error
+          ? lastError
+          : new Error(`LLM request timed out after ${timeoutMs}ms`)
+      }
+      const { signal, cleanup } = createTimeoutSignal(options.signal, remainingMs)
       let retainCleanupUntilBodyConsumed = false
       try {
         const response = await INFERENCE_TRANSPORT.chat({
@@ -992,7 +999,6 @@ async function fetchLlmChatCompletions(
         })
         lastResponse = response
         if (response.ok) {
-          activeDefaultModel = candidateModel
           responseModel.set(response, getInferenceResponseModel(response) ?? candidateModel)
           // Fetch resolves when headers arrive. Keep both the request-abort
           // listener and absolute timeout alive until JSON/SSE body consumption
@@ -1009,7 +1015,10 @@ async function fetchLlmChatCompletions(
         if (!retainCleanupUntilBodyConsumed) cleanup()
       }
 
-      if (attempt < retries) await delayWithSignal(200 * (attempt + 1), options.signal)
+      const retryDelay = 200 * (attempt + 1)
+      if (attempt < retries && Date.now() + retryDelay < deadline) {
+        await delayWithSignal(retryDelay, options.signal)
+      }
     }
   }
 
@@ -1369,12 +1378,24 @@ export type GroundingAssessment = {
 const CITATION_GROUP_PATTERN = /\[\s*(L?\d+(?:\s*[,;]\s*L?\d+)*)\s*[,;]?\s*\]/gi
 
 export function extractCitationIds(text: string): string[] {
-  return Array.from(text.matchAll(CITATION_GROUP_PATTERN)).flatMap((match) =>
-    match[1]
-      .split(/[,;]/)
-      .map((identifier) => identifier.trim().toUpperCase())
-      .filter(Boolean)
-  )
+  return Array.from(text.matchAll(CITATION_GROUP_PATTERN)).flatMap((match) => {
+    // Semicolons separate distinct citation groupings (e.g. [1; L2] or [L1, 2; 3, 4]).
+    // Commas within a grouping propagate a leading 'L' prefix across numbers (e.g. [L1, 2] -> L1, L2).
+    const clauses = match[1].split(';').map((c) => c.trim()).filter(Boolean)
+    return clauses.flatMap((clause) => {
+      const members = clause
+        .split(',')
+        .map((identifier) => identifier.trim().toUpperCase())
+        .filter(Boolean)
+      const leadingPrefix = members[0]?.startsWith('L') ? 'L' : ''
+      return members.map((member) => {
+        if (leadingPrefix && !member.startsWith('L')) {
+          return `${leadingPrefix}${member}`
+        }
+        return member
+      })
+    })
+  })
 }
 
 function normalizeGroundingProse(text: string): string {
@@ -1566,7 +1587,7 @@ function applyTrailingBlockquoteCitationScope(
       if (opening < 0 || closing <= opening || closing > trailingStart) continue
 
       const attribution = line.slice(0, opening)
-      if (!/\bRFC\s+\d+\b[^\n]{0,240}\b(?:states?|defines?|specifies?|says?|requires?|permits?|allows?)\b/i.test(attribution)) {
+      if (!/\b(?:RFC\s+\d+|\[L?\d+\]|the\s+(?:local\s+)?(?:note|document|file|doc|runbook|specification|vault|source|spec)\b|[a-z0-9_.-]+\.md\b)[^\n]{0,240}\b(?:states?|defines?|specifies?|says?|requires?|permits?|allows?|notes?|describes?)\b/i.test(attribution)) {
         continue
       }
 
@@ -1588,7 +1609,7 @@ function applyTrailingBlockquoteCitationScope(
   // quotation that supplies its evidence. Allow direct adjacency or the one
   // blank line Markdown commonly places before a blockquote; two blank lines,
   // intervening prose, arbitrary colon leads, and list items do not match.
-  const attributedBlockquote = /(^[ \t]{0,3}(?:Per\s+RFC\b|According\s+to\b|As\s+stated\s+in\b)[^\n]{0,240}:[ \t]*)(\n(?:[ \t]*\n)?)((?:[ \t]{0,3}>[^\n]*(?:\n|$))+)/gmi
+  const attributedBlockquote = /(^[ \t]{0,3}(?:Per\s+(?:RFC|the\s+(?:local\s+)?(?:note|vault|document|spec))\b|According\s+to\b|As\s+stated\s+in\b)[^\n]{0,240}:[ \t]*)(\n(?:[ \t]*\n)?)((?:[ \t]{0,3}>[^\n]*(?:\n|$))+)/gmi
   const attributedProse = attributedInlineProse.replace(
     attributedBlockquote,
     (match, lead: string, gap: string, block: string) => {
@@ -2441,9 +2462,13 @@ type IndexDirectoryResult = {
   skippedUnreadableFiles: number
 }
 
-const EXCLUDED_DIRECTORY_NAMES = new Set([
+export const DEFAULT_EXCLUDED_DIRECTORIES = new Set([
   '.git', '.hg', '.svn', '.obsidian', '.trash', '.cache',
   'node_modules', 'dist', 'build', 'coverage', '__pycache__', '.venv', 'venv',
+  'repomix-output', '__NUKED', 'experiment-results', '.turbo', 'turbo',
+  '.next', 'next', '.nuxt', 'nuxt', '.output', 'output', 'target',
+  'bin', 'obj', '.pytest_cache', '.mypy_cache', '.ruff_cache',
+  '.yarn', '.pnpm', 'tmp', 'temp',
 ])
 
 function metadataFallback(fullPath: string, fileName: string, size: number, modifiedAt: number, obsidianRoot: boolean): {
@@ -2474,7 +2499,8 @@ async function indexDirectory(
   limits: { maxFiles: number; maxChunks: number } = {
     maxFiles: MAX_INDEXED_FILES,
     maxChunks: MAX_INDEXED_CHUNKS,
-  }
+  },
+  customExcludePatterns: string[] = []
 ): Promise<IndexDirectoryResult> {
   const chunks: KnowledgeChunk[] = []
   const formatCounts: Record<string, number> = {}
@@ -2508,13 +2534,28 @@ async function indexDirectory(
       const full = join(dir, e.name)
       if (e.isSymbolicLink()) continue
       if (e.isDirectory()) {
-        if (!EXCLUDED_DIRECTORY_NAMES.has(e.name) && !e.name.startsWith('.')) await walk(full)
+        const lowerName = e.name.toLowerCase()
+        const isExcluded =
+          DEFAULT_EXCLUDED_DIRECTORIES.has(e.name) ||
+          DEFAULT_EXCLUDED_DIRECTORIES.has(lowerName) ||
+          e.name.startsWith('.') ||
+          customExcludePatterns.some((pattern) => {
+            const rel = relative(dirPath, full)
+            return e.name === pattern || rel.includes(pattern)
+          })
+        if (!isExcluded) await walk(full)
         continue
       }
       if (!e.isFile()) continue
       if (e.name.startsWith('.') || SENSITIVE_FILE_PATTERN.test(e.name)) {
         skippedSensitiveFiles += 1
         continue
+      }
+      if (customExcludePatterns.length > 0) {
+        const rel = relative(dirPath, full)
+        if (customExcludePatterns.some((p) => e.name === p || rel.includes(p))) {
+          continue
+        }
       }
       if (fileCount >= limits.maxFiles || chunks.length >= limits.maxChunks) {
         capped = true
@@ -2904,10 +2945,7 @@ function attachLocalRetrievalDiagnostics<T extends readonly unknown[]>(
   return results
 }
 
-function searchKnowledge(q: string, limit = 10, inheritedOptions: LocalSearchOptions = {}): KnowledgeSearchResult[] {
-  const parsed = parseLocalSearchQuery(q, inheritedOptions)
-  const searchQuery = parsed.query
-  const options = parsed.options
+function searchKnowledgeCore(searchQuery: string, limit = 10, options: LocalSearchOptions = {}): KnowledgeSearchResult[] {
   // Reuse the web ranker's tokenizer so conversational framing cannot make
   // thousands of local chunks match on "who", "is", or "what" alone.
   const queryTokens = Array.from(new Set(tokenizeQuery(searchQuery)))
@@ -3182,6 +3220,15 @@ function searchKnowledge(q: string, limit = 10, inheritedOptions: LocalSearchOpt
   })
 }
 
+function searchKnowledge(
+  q: string,
+  limit = 10,
+  inheritedOptions: LocalSearchOptions = {}
+): KnowledgeSearchResult[] {
+  const parsed = parseLocalSearchQuery(q, inheritedOptions)
+  return searchKnowledgeCore(parsed.query, limit, parsed.options)
+}
+
 /**
  * Converts one local-retrieval call to a comparable 0..1 scale. Raw BM25 values
  * are meaningful only within the corpus/query that produced them; comparing a
@@ -3208,10 +3255,10 @@ function searchKnowledgeAcrossQueries(
   options: LocalSearchOptions = {}
 ): KnowledgeSearchResult[] {
   const bounded = Array.from(new Set(queries.map((query) => query.trim()).filter(Boolean))).slice(0, 3)
-  if (bounded.length <= 1) return searchKnowledge(bounded[0] ?? '', totalLimit, options)
+  if (bounded.length <= 1) return searchKnowledgeCore(bounded[0] ?? '', totalLimit, options)
 
   const branches = bounded.map((query) => {
-    const results = searchKnowledge(query, Math.max(6, Math.ceil(totalLimit / bounded.length) + 2), options)
+    const results = searchKnowledgeCore(query, Math.max(6, Math.ceil(totalLimit / bounded.length) + 2), options)
     return { results, diagnostics: getLocalRetrievalDiagnostics(results) }
   })
   const byChunk = new Map<string, KnowledgeSearchResult>()
@@ -3937,7 +3984,8 @@ async function resolveKnowledgeDirectoryPath(
 async function indexKnowledgeResource(
   canonicalPath: string,
   requestedLabel: string | undefined,
-  signal: AbortSignal
+  signal: AbortSignal,
+  customExcludePatterns?: string[]
 ): Promise<{ resource: PersistedKnowledgeResource; result: IndexDirectoryResult }> {
   await ensureKnowledgeLoaded()
   return withKnowledgeMutation(async () => {
@@ -3953,6 +4001,7 @@ async function indexKnowledgeResource(
       throw new Error(`Knowledge roots cannot overlap. “${overlap.label}” already covers ${overlap.path}.`)
     }
 
+    const excludedPatterns = customExcludePatterns ?? existing?.excludedPatterns ?? []
     const retainedChunks = existing
       ? knowledgeIndex.filter((chunk) => !isPathInside(canonicalPath, chunk.filePath))
       : [...knowledgeIndex]
@@ -3960,12 +4009,13 @@ async function indexKnowledgeResource(
     const result = await indexDirectory(canonicalPath, signal, {
       maxFiles: Math.max(0, MAX_INDEXED_FILES - retainedFiles),
       maxChunks: Math.max(0, MAX_INDEXED_CHUNKS - retainedChunks.length),
-    })
+    }, excludedPatterns)
     const resource: PersistedKnowledgeResource = {
       id: existing?.id ?? crypto.randomUUID(),
       path: canonicalPath,
       label: normalizeResourceLabel(requestedLabel ?? existing?.label, canonicalPath),
       kind: result.obsidian ? 'obsidian' : 'folder',
+      excludedPatterns: excludedPatterns.length > 0 ? excludedPatterns : undefined,
       indexedAt: Date.now(),
       latestModifiedAt: result.latestModifiedAt,
       fileCount: result.fileCount,
@@ -4435,7 +4485,7 @@ app.delete('/api/browser-history', async (c) => {
 })
 
 app.post('/api/knowledge/index', async (c) => {
-  const body = (await c.req.json()) as { path?: unknown; label?: unknown }
+  const body = (await c.req.json()) as { path?: unknown; label?: unknown; excludedPatterns?: unknown }
   const path = asTrimmedString(body.path, 4000)
   if (!path) return c.json({ error: 'path required' }, 400)
 
@@ -4449,10 +4499,14 @@ app.post('/api/knowledge/index', async (c) => {
     return c.json({ error: INVALID_VAULT_PATH_MESSAGE }, 400)
   }
   try {
+    const excludedPatterns = Array.isArray(body.excludedPatterns)
+      ? body.excludedPatterns.map((p) => asTrimmedString(p, 200)).filter(Boolean)
+      : undefined
     const { resource, result } = await indexKnowledgeResource(
       canonicalPath,
       asTrimmedString(body.label, 80) || undefined,
-      c.req.raw.signal
+      c.req.raw.signal,
+      excludedPatterns
     )
     return c.json({
       indexed: result.chunks.length,
@@ -5612,8 +5666,6 @@ app.on('POST', ['/api/chat', '/api/ask'], async (c) => {
     const normativeHttpVerification =
       /\b(?:normative HTTP specifications?|RFC requirement)\b/i.test(retrievalQuery) &&
       /\bretry[\s-]*after\b/i.test(retrievalQuery)
-    const focusedWebVerification =
-      /\blatest stable\b/i.test(retrievalQuery) || normativeHttpVerification
     const evidenceLimit = hasQuotedDocumentTitle ? 10 : 12
     const fusedPack = selectFusedEvidence(ranked, localCandidates, {
       limit: evidenceLimit,
@@ -7176,6 +7228,8 @@ export const __test__ = {
   isSafeHttpUrl,
   sanitizeConversationMessages,
   searchKnowledge,
+  searchKnowledgeCore,
+  searchKnowledgeAcrossQueries,
   parseLocalSearchQuery,
   getLocalRetrievalDiagnostics,
   rankLocalEvidence,
@@ -7199,6 +7253,8 @@ export const __test__ = {
   MAX_LOCAL_CONTEXT_SOURCES,
   MAX_CHUNKS_PER_FILE,
   SENSITIVE_FILE_PATTERN,
+  DEFAULT_EXCLUDED_DIRECTORIES,
+  indexDirectory,
   shortEntityQuery,
   localChunkMatchesOptions,
   localCoverageFloor,

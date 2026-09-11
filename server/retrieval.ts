@@ -949,9 +949,6 @@ export function rankWebResults(
     const agreement = isHistory ? 0 : engineAgreement(result)
     const recency = isHistory ? 0 : recencyScore(result.publishedDate, nowMs)
     const preference = hostPreferenceScore(result.url, hostPreferences)
-    const originatingQueries = result.rankingQueries && result.rankingQueries.length > 0
-      ? result.rankingQueries
-      : [query]
     const rankingQueries = mergeRankingQueries(
       query,
       deriveRankingQueries(query),

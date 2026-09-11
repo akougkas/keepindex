@@ -108,6 +108,15 @@ describe('grouped citations', () => {
     expect(extractCitationIds('No citations at all here.')).toEqual([])
   })
 
+  it('propagates the leading namespace across grouped local citations (KIX-22)', () => {
+    expect(extractCitationIds('Local evidence supports this [L1, 2, 3].')).toEqual(['L1', 'L2', 'L3'])
+    expect(extractCitationIds('Mixed sources [L1, L2; 3, 4].')).toEqual(['L1', 'L2', '3', '4'])
+    const quality = assessGrounding('Local notes document this behavior [L1, 2].', 0, 3)
+    expect(quality.citedSourceCount).toBe(2)
+    expect(quality.invalidCitations).toEqual([])
+    expect(quality.status).toBe('strong')
+  })
+
   it('credits a claim cited only in grouped form', () => {
     const answer =
       'WAL mode lets readers and writers coexist without blocking each other [2, 3, 5]. ' +
@@ -413,6 +422,16 @@ describe('Markdown blockquote citation scope', () => {
     const quality = assessGrounding(answer, 1, 0)
     expect(quality.citationCoveragePct).toBe(0)
     expect(quality.invalidCitations).toEqual(['9'])
+  })
+
+  it('credits local document and note attributions immediately introducing a cited quote (KIX-22)', () => {
+    const answer = [
+      'According to the local runbook note, the backup procedure is configured as follows:',
+      '',
+      '> Take an immediate snapshot of the primary database before rotating keys [L1].',
+    ].join('\n')
+
+    expect(assessGrounding(answer, 0, 1).citationCoveragePct).toBe(100)
   })
 })
 
