@@ -47,10 +47,20 @@ export function remarkCitations() {
         for (const match of child.value.matchAll(CITATION_PATTERN)) {
           const index = match.index ?? 0
           if (index > cursor) nextChildren.push({ type: 'text', value: child.value.slice(cursor, index) })
-          const identifiers = match[1]
-            .split(/[,;]/)
-            .map((identifier) => identifier.trim().toUpperCase())
-            .filter(Boolean)
+          const clauses = match[1].split(';').map((c) => c.trim()).filter(Boolean)
+          const identifiers = clauses.flatMap((clause) => {
+            const members = clause
+              .split(',')
+              .map((identifier) => identifier.trim().toUpperCase())
+              .filter(Boolean)
+            const leadingPrefix = members[0]?.startsWith('L') ? 'L' : ''
+            return members.map((member) => {
+              if (leadingPrefix && !member.startsWith('L')) {
+                return `${leadingPrefix}${member}`
+              }
+              return member
+            })
+          })
           identifiers.forEach((citation, position) => {
             if (position > 0) nextChildren.push({ type: 'text', value: ' ' })
             nextChildren.push({

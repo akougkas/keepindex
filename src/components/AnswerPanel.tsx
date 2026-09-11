@@ -60,6 +60,11 @@ function AnswerMetadataBar() {
         className="hover:text-foreground transition-colors"
       >
         {totalSources} source{totalSources !== 1 ? 's' : ''}
+        {localSources.length > 0 && (
+          <span className="ml-1 text-emerald-600 dark:text-emerald-400 font-mono">
+            ({localSources.length} vault)
+          </span>
+        )}
       </button>
       <span className="flex items-center gap-1.5">
         {status === 'thinking' && (
