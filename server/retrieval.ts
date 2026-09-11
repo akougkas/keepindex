@@ -1203,7 +1203,7 @@ export function selectFusedEvidence<
   const usableLocalSources = localWithScores
     .filter(({ source, normalizedScore, queryCoverage }) =>
       normalizedScore >= minLocalNormalizedScore &&
-      (source.score == null || (Number.isFinite(source.score) && source.score > 0)) &&
+      (source.score == null || (Number.isFinite(source.score) && source.score >= 0.05)) &&
       (source.queryCoverage == null || (
         queryCoverage != null &&
         queryCoverage >= (

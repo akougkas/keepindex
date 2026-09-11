@@ -26,6 +26,9 @@ export type FederatedSearchResult = {
   tags?: string[]
   aliases?: string[]
   modifiedAt?: number
+  queryCoverage?: number
+  queryTermCount?: number
+  rawScore?: number
   browser?: string
   profile?: string
   visitCount?: number
@@ -86,16 +89,35 @@ function displayWinner(left: FederatedSearchResult, right: FederatedSearchResult
  */
 const MIN_RELEVANCE_SCORE = 0.05
 
+function coverageAdmissionFloor(termCount: number | undefined, legacyFloor: number): number {
+  if (termCount == null || !Number.isFinite(termCount)) {
+    return legacyFloor
+  }
+  const count = Math.max(0, Math.trunc(termCount))
+  if (count <= 1) return 0.75
+  if (count === 2) return 0.55
+  if (count === 3) return 0.42
+  if (count === 4) return 0.34
+  return 0.24
+}
+
 function admitByRelevance(
   candidates: FederatedSearchResult[],
   minRelevanceScore: number
 ): FederatedSearchResult[] {
   if (minRelevanceScore <= 0) return candidates
-  // A candidate without a usable score is admitted: an unknown relevance is not
-  // evidence of a bad match, and rank order still decides where it lands.
-  return candidates.filter((candidate) =>
-    !Number.isFinite(candidate.score) || candidate.score >= minRelevanceScore
-  )
+  return candidates.filter((candidate) => {
+    if (candidate.kind !== 'web' && candidate.kind !== 'history') {
+      if (typeof candidate.queryCoverage === 'number' && Number.isFinite(candidate.queryCoverage)) {
+        const floor = coverageAdmissionFloor(candidate.queryTermCount, 0.3)
+        if (candidate.queryCoverage < floor) return false
+      }
+      if (typeof candidate.rawScore === 'number' && Number.isFinite(candidate.rawScore) && candidate.rawScore < minRelevanceScore) {
+        return false
+      }
+    }
+    return !Number.isFinite(candidate.score) || candidate.score >= minRelevanceScore
+  })
 }
 
 /** Weighted reciprocal-rank fusion across independently scored providers. */
