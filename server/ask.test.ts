@@ -596,4 +596,133 @@ describe('grounded answer degradation', () => {
     expect(record.answerText).toBe('')
     expect(record.error).toContain('produced no answer')
   })
+
+  it('records web.state as skipped when target=vault (KIX-13)', async () => {
+    const requestId = `target-vault-${crypto.randomUUID()}`
+    __test__.setKnowledgeIndex([{
+      id: 'vault:1',
+      filePath: '/home/user/vault/note.md',
+      fileName: 'note.md',
+      content: 'Local SQLite knowledge note.',
+      metadata: { sourceKind: 'note' },
+      startLine: 1,
+      endLine: 1,
+    }])
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      if (url.includes('/search?')) {
+        throw new Error('SearXNG should not be called when target=vault')
+      }
+      if (url.includes('/v1/chat/completions')) {
+        return new Response(
+          'data: {"choices":[{"delta":{"content":"Answer from vault [L1]."},"finish_reason":"stop"}]}\n\n',
+          { status: 200, headers: { 'Content-Type': 'text/event-stream' } }
+        )
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    }) as typeof fetch
+
+    const response = await app.request('/api/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: 'Local SQLite knowledge', target: 'vault', requestId }),
+    })
+    expect(response.status).toBe(200)
+    await response.text()
+
+    const recordResponse = await app.request(`/api/queries/${requestId}`)
+    const { record } = await recordResponse.json() as {
+      record: {
+        retrievalDiagnostics: {
+          web: { state: string; attempted: boolean }
+          local: { state: string; attempted: boolean }
+        }
+      }
+    }
+    expect(record.retrievalDiagnostics.web.state).toBe('skipped')
+    expect(record.retrievalDiagnostics.web.attempted).toBe(false)
+    expect(record.retrievalDiagnostics.local.state).toBe('ok')
+  })
+
+  it('grades truncated completions with truncated flag and persists grounding (KIX-20)', async () => {
+    const requestId = `truncated-grading-${crypto.randomUUID()}`
+    __test__.setKnowledgeIndex([{
+      id: 'vault:1',
+      filePath: '/vault/note.md',
+      fileName: 'note.md',
+      content: 'SQLite WAL checkpoint evidence.',
+      startLine: 1,
+      endLine: 1,
+    }])
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      if (url.includes('/search?')) {
+        return new Response(JSON.stringify({ results: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      }
+      if (url.includes('/v1/chat/completions')) {
+        return new Response(
+          'data: {"choices":[{"delta":{"content":"SQLite WAL checkpoint concurrency allows readers [L1] while writers append fresh frames."},"finish_reason":"length"}]}\n\n',
+          { status: 200, headers: { 'Content-Type': 'text/event-stream' } }
+        )
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    }) as typeof fetch
+
+    const response = await app.request('/api/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: 'SQLite WAL checkpoint', requestId }),
+    })
+    const stream = await response.text()
+    expect(stream).toContain('"type":"quality"')
+    expect(stream).toContain('"truncated":true')
+    expect(stream).toContain('"type":"error"')
+
+    const recordResponse = await app.request(`/api/queries/${requestId}`)
+    const { record } = await recordResponse.json() as {
+      record: {
+        outcome: string
+        grounding: { status: string; truncated?: boolean; citationCoveragePct: number } | null
+      }
+    }
+    expect(record.outcome).toBe('interrupted')
+    expect(record.grounding).toBeDefined()
+    expect(record.grounding?.truncated).toBe(true)
+    expect(record.grounding?.citationCoveragePct).toBeGreaterThan(0)
+  })
+
+  it('returns status discriminator for related and takeaways on failure (KIX-21)', async () => {
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      if (url.includes('/v1/chat/completions')) {
+        return new Response('internal error', { status: 500 })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    }) as typeof fetch
+
+    const relatedRes = await app.request('/api/related', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: 'What is SQLite WAL?',
+        answer: 'SQLite Write-Ahead Logging allows concurrent readers and writers without lock contention.',
+      }),
+    })
+    expect(relatedRes.status).toBe(200)
+    const relatedBody = await relatedRes.json() as { status: string; questions: string[] }
+    expect(relatedBody.status).toBe('unavailable')
+    expect(relatedBody.questions).toEqual([])
+
+    const takeawaysRes = await app.request('/api/takeaways', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        answer: 'SQLite Write-Ahead Logging allows concurrent readers and writers without lock contention, keeping reader snapshots isolated while writers append frames.',
+      }),
+    })
+    expect(takeawaysRes.status).toBe(200)
+    const takeawaysBody = await takeawaysRes.json() as { status: string; takeaways: string[] }
+    expect(takeawaysBody.status).toBe('unavailable')
+    expect(takeawaysBody.takeaways).toEqual([])
+  })
 })

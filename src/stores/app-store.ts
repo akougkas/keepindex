@@ -261,6 +261,7 @@ interface AppState {
   searchResultsQuery: string
   relatedQuestions: string[]
   relatedQuestionsLoading: boolean
+  relatedQuestionsStatus: 'idle' | 'loading' | 'ok' | 'unavailable'
   chatMessages: ChatMessage[]
   focusMode: FocusMode
   searchTarget: SearchTarget
@@ -346,6 +347,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   searchResultsQuery: '',
   relatedQuestions: [],
   relatedQuestionsLoading: false,
+  relatedQuestionsStatus: 'idle',
   chatMessages: [],
   focusMode: 'all',
   searchTarget: 'all',
@@ -582,14 +584,14 @@ export const useAppStore = create<AppState>()((set, get) => ({
     const trimmedQuery = query.trim()
     const trimmedAnswer = answer.trim()
     if (!trimmedQuery || trimmedAnswer.length < 80 || wordCount(trimmedAnswer) < 12) {
-      set({ relatedQuestions: [], relatedQuestionsLoading: false })
+      set({ relatedQuestions: [], relatedQuestionsLoading: false, relatedQuestionsStatus: 'idle' })
       return
     }
     relatedAbort?.abort()
     relatedAbort = new AbortController()
     const signal = relatedAbort.signal
     const selectedModel = useSettingsStore.getState().selectedModel
-    set({ relatedQuestionsLoading: true, relatedQuestions: [] })
+    set({ relatedQuestionsLoading: true, relatedQuestions: [], relatedQuestionsStatus: 'loading' })
     try {
       const res = await fetch('/api/related', {
         method: 'POST',
@@ -598,14 +600,19 @@ export const useAppStore = create<AppState>()((set, get) => ({
         signal,
       })
       if (!res.ok) throw new Error('related request failed')
-      const data = (await res.json()) as { questions?: string[] }
+      const data = (await res.json()) as { status?: string; questions?: string[] }
       if (signal.aborted) return
       if (generation != null && !isCurrentGeneration('answer', generation)) return
       if (get().mode !== 'ai' || get().query !== query) {
-        set({ relatedQuestionsLoading: false })
+        set({ relatedQuestionsLoading: false, relatedQuestionsStatus: 'idle' })
         return
       }
-      set({ relatedQuestions: data.questions ?? [], relatedQuestionsLoading: false })
+      const isUnavailable = data.status === 'unavailable'
+      set({
+        relatedQuestions: data.questions ?? [],
+        relatedQuestionsLoading: false,
+        relatedQuestionsStatus: isUnavailable ? 'unavailable' : 'ok',
+      })
     } catch (err) {
       if (isAbortError(err)) {
         if (generation == null || isCurrentGeneration('answer', generation)) {
@@ -614,7 +621,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
         return
       }
       if (generation == null || isCurrentGeneration('answer', generation)) {
-        set({ relatedQuestions: [], relatedQuestionsLoading: false })
+        set({ relatedQuestions: [], relatedQuestionsLoading: false, relatedQuestionsStatus: 'unavailable' })
       }
     }
   },

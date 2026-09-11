@@ -1357,6 +1357,7 @@ export type GroundingAssessment = {
   invalidCitations: string[]
   note: string
   addedCitationCount?: number
+  truncated?: boolean
 }
 
 /**
@@ -3758,6 +3759,7 @@ function skippedRetrievalAttempt(provider: string): RetrievalAttemptSnapshot {
 function buildSingleRetrievalDiagnostics(input: {
   strategy: string
   webOutcome: SearchResult[] | SearchFailure
+  webAttempted?: boolean
   selectedWebCount: number
   usableWebCount?: number
   webDetail?: string | null
@@ -3772,6 +3774,7 @@ function buildSingleRetrievalDiagnostics(input: {
     strategy: input.strategy,
     web: {
       provider: web.provider,
+      attempted: input.webAttempted ?? (web.attempts > 0),
       rawCandidateCount: web.rawCandidateCount,
       usableCandidateCount: input.usableWebCount ?? web.usableCandidateCount,
       selectedCount: input.selectedWebCount,
@@ -4939,6 +4942,7 @@ async function handleFederatedSearch(c: Context, input: {
     const retrievalDiagnostics = buildSingleRetrievalDiagnostics({
       strategy: 'federated-weighted-rrf-v1',
       webOutcome: run.webOutcome,
+      webAttempted: targetIncludesWeb(input.target),
       selectedWebCount: run.fused.counts.web,
       webDetail: [
         `target=${input.target}, history-candidates=${run.historyResults.length}`,
@@ -5209,15 +5213,16 @@ ${generationPolicy.compactContext ? 'Compact-model policy: answer narrowly, avoi
 })
 
 app.post('/api/related', async (c) => {
+  const startedAt = Date.now()
   const body = (await c.req.json()) as { query?: unknown; answer?: unknown; model?: unknown }
   const query = normalizeIncomingQuery(body.query)
   const answer = typeof body.answer === 'string' ? body.answer.trim() : ''
   const targetModel = normalizeModel(body.model || activeDefaultModel)
-  if (answer.length < MIN_RELATED_INPUT_CHARS) return c.json({ questions: [] })
-  if (!query || !answer) return c.json({ questions: [] }, 400)
+  if (answer.length < MIN_RELATED_INPUT_CHARS) return c.json({ status: 'skipped', questions: [] })
+  if (!query || !answer) return c.json({ status: 'unavailable', questions: [] }, 400)
   const cacheKey = `related:${targetModel}::${query.toLowerCase()}::${truncateText(answer.toLowerCase(), 2400)}`
   const cached = getCachedValue(relatedQuestionsCache, cacheKey)
-  if (cached) return c.json({ questions: cached })
+  if (cached) return c.json({ status: 'ok', questions: cached })
 
   const systemPrompt = `You generate follow-up questions for a search engine.
 Return STRICT JSON only: {"questions":["...","...","...","..."]}.
@@ -5239,7 +5244,17 @@ Requirements:
         maxTokens: 300,
       }
     )
-    if (text == null) return c.json({ questions: [] })
+    if (text == null) {
+      void persistTelemetrySafely({
+        kind: 'ask',
+        query,
+        latencyMs: Date.now() - startedAt,
+        success: false,
+        error: 'Follow-up completion returned empty or model unavailable',
+        metadata: { endpoint: '/api/related', model: targetModel },
+      })
+      return c.json({ status: 'unavailable', questions: [] })
+    }
     const parsed = parseJsonObject(text)
     const fromJson = Array.isArray(parsed?.questions)
       ? parsed.questions.filter((q): q is string => typeof q === 'string')
@@ -5255,10 +5270,18 @@ Requirements:
       180
     )
     setCachedValue(relatedQuestionsCache, cacheKey, questions)
-    return c.json({ questions })
+    return c.json({ status: 'ok', questions })
   } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') return c.json({ questions: [] }, 408)
-    return c.json({ questions: [] })
+    if (err instanceof Error && err.name === 'AbortError') return c.json({ status: 'unavailable', questions: [] }, 408)
+    void persistTelemetrySafely({
+      kind: 'ask',
+      query,
+      latencyMs: Date.now() - startedAt,
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to generate related questions',
+      metadata: { endpoint: '/api/related', model: targetModel },
+    })
+    return c.json({ status: 'unavailable', questions: [] })
   }
 })
 
@@ -5515,6 +5538,7 @@ app.on('POST', ['/api/chat', '/api/ask'], async (c) => {
       const retrievalDiagnostics = buildSingleRetrievalDiagnostics({
         strategy: 'weighted-rrf-v1',
         webOutcome: rawResults,
+        webAttempted: allowWeb,
         selectedWebCount: 0,
         local: localRetrievalAttempt(localCandidates, 0, localSearchLatencyMs),
       })
@@ -5618,6 +5642,7 @@ app.on('POST', ['/api/chat', '/api/ask'], async (c) => {
     const retrievalDiagnostics = buildSingleRetrievalDiagnostics({
       strategy: 'weighted-rrf-v1',
       webOutcome: rawResults,
+      webAttempted: allowWeb,
       usableWebCount: fusedPack.counts.usableWeb,
       selectedWebCount: fusedPack.counts.selectedWeb,
       webPartial: allowWeb && Array.isArray(rawResults) && webSearchDegraded,
@@ -5725,6 +5750,7 @@ ${webSection}${localSection}
       let recordCompleted = false
       let answerText = ''
       let actualModel: string | null = null
+      let currentQuality: GroundingAssessment | null = null
       try {
         await stream.writeSSE({
           event: 'message',
@@ -5955,6 +5981,23 @@ ${webSection}${localSection}
           )
         }
         if (metrics.finishReason === 'length') {
+          const finishGroundingAssessment = executionTrace.start('grounding_assessment')
+          let quality = assessGrounding(answerText, results.length, localResults.length)
+          quality = { ...quality, truncated: true }
+          currentQuality = quality
+          finishGroundingAssessment('ok', {
+            citationCoveragePct: quality.citationCoveragePct,
+            invalidCitations: quality.invalidCitations.length,
+            truncated: true,
+          })
+          await stream.writeSSE({
+            event: 'message',
+            data: JSON.stringify(
+              requestId
+                ? { type: 'quality', data: quality, requestId }
+                : { type: 'quality', data: quality }
+            ),
+          })
           throw new IncompleteLlmStreamError(
             'model reached the generation limit after a partial answer',
             metrics
@@ -6087,6 +6130,7 @@ ${webSection}${localSection}
           answerText,
           sourcePack: sourcesPayload,
           citationIds: extractCitationIds(answerText),
+          grounding: currentQuality ?? null,
           sourceCount: results.length + localResults.length,
           candidateSourceCount: webCandidates.length + localCandidates.length,
           retrievalDiagnostics,
@@ -6154,14 +6198,15 @@ ${webSection}${localSection}
 })
 
 app.post('/api/takeaways', async (c) => {
+  const startedAt = Date.now()
   const body = (await c.req.json()) as { answer?: unknown; model?: unknown }
   const answer = typeof body.answer === 'string' ? body.answer.trim() : ''
   const targetModel = normalizeModel(body.model || activeDefaultModel)
-  if (answer.length < MIN_TAKEAWAY_INPUT_CHARS) return c.json({ takeaways: [] })
-  if (!answer) return c.json({ takeaways: [] }, 400)
+  if (answer.length < MIN_TAKEAWAY_INPUT_CHARS) return c.json({ status: 'skipped', takeaways: [] })
+  if (!answer) return c.json({ status: 'unavailable', takeaways: [] }, 400)
   const cacheKey = `takeaways:${targetModel}::${truncateText(answer.toLowerCase(), 5000)}`
   const cached = getCachedValue(takeawaysCache, cacheKey)
-  if (cached) return c.json({ takeaways: cached })
+  if (cached) return c.json({ status: 'ok', takeaways: cached })
   const systemPrompt = `Extract key takeaways from this text.
 Return STRICT JSON only: {"takeaways":["...", "..."]}.
 Rules:
@@ -6181,7 +6226,17 @@ Rules:
         maxTokens: 320,
       }
     )
-    if (text == null) return c.json({ takeaways: [] })
+    if (text == null) {
+      void persistTelemetrySafely({
+        kind: 'ask',
+        query: truncateText(answer, 120),
+        latencyMs: Date.now() - startedAt,
+        success: false,
+        error: 'Takeaway completion returned empty or model unavailable',
+        metadata: { endpoint: '/api/takeaways', model: targetModel },
+      })
+      return c.json({ status: 'unavailable', takeaways: [] })
+    }
     const parsed = parseJsonObject(text)
     const fromJson = Array.isArray(parsed?.takeaways)
       ? parsed.takeaways.filter((t): t is string => typeof t === 'string')
@@ -6197,10 +6252,18 @@ Rules:
       220
     )
     setCachedValue(takeawaysCache, cacheKey, takeaways)
-    return c.json({ takeaways })
+    return c.json({ status: 'ok', takeaways })
   } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') return c.json({ takeaways: [] }, 408)
-    return c.json({ takeaways: [] })
+    if (err instanceof Error && err.name === 'AbortError') return c.json({ status: 'unavailable', takeaways: [] }, 408)
+    void persistTelemetrySafely({
+      kind: 'ask',
+      query: truncateText(answer, 120),
+      latencyMs: Date.now() - startedAt,
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to generate takeaways',
+      metadata: { endpoint: '/api/takeaways', model: targetModel },
+    })
+    return c.json({ status: 'unavailable', takeaways: [] })
   }
 })
 
@@ -6835,6 +6898,9 @@ ${sourcePack}
       // Scored against the pack the model actually received, never the wider
       // accumulator: a citation above the pack size is a fabrication.
       let quality = assessGrounding(reportText, packWeb.length, packLocal.length)
+      if (synthesisMetrics?.finishReason === 'length') {
+        quality = { ...quality, truncated: true }
+      }
       if (!synthesisInterrupted && quality.citationCoveragePct < CITATION_REPAIR_TARGET_PCT) {
         try {
           await writeEvent('thinking_delta', 'Checking sentence-level citations…\n')
