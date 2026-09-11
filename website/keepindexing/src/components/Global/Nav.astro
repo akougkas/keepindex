@@ -1,0 +1,372 @@
+---
+import Icon from "@/components/Media/Icon.astro";
+import NavLink from "@/components/Global/NavLink.astro";
+import Button from "@/components/Button.astro";
+import logo from "@/assets/brand/keepindex-wordmark-light.svg";
+import { SITE_NAME } from "@/consts.ts";
+
+interface Props {
+  /** Set to `false` to skip rendering this component and its children. */
+  render?: boolean;
+  /**
+   * Fix the nav over the page rather than letting it stick in flow, so the
+   * first section starts underneath it. Give that section
+   * `paddingTop="navoverlap"` to clear the bar.
+   */
+  overlap?: boolean;
+}
+
+const { render = true, overlap = false } = Astro.props;
+---
+
+{
+  render && (
+    <header class:list={["nav_wrap", overlap && "overlap"]}>
+      <div class="nav_inner">
+        <a class="nav_logo" href="/" aria-label={SITE_NAME}>
+          <Icon src={logo} variant="full-width" />
+        </a>
+        <button
+          class="nav_toggle"
+          type="button"
+          aria-label="Menu"
+          aria-expanded="false"
+          aria-controls="nav-menu"
+        >
+          <span class="nav_toggle_icon" />
+        </button>
+        <nav class="nav_menu" id="nav-menu" aria-label="Main">
+          <div class="nav_menu_inner">
+            <ul class="nav_links">
+              <NavLink href="/">Home</NavLink>
+              <NavLink href="/features">Features</NavLink>
+              <NavLink href="/inference">Local AI</NavLink>
+              <NavLink href="/architecture">Architecture</NavLink>
+              <NavLink href="/docs">Docs</NavLink>
+              <NavLink href="/privacy">Privacy</NavLink>
+            </ul>
+            <div class="nav_actions">
+              <a
+                class="nav_github"
+                href="https://github.com/akougkas/keepindex"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="KeepIndex on GitHub"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
+                </svg>
+                <span>GitHub</span>
+              </a>
+              <Button element="link" href="/docs" emphasis="primary" class="nav_cta">
+                Quickstart
+              </Button>
+            </div>
+          </div>
+        </nav>
+      </div>
+    </header>
+  )
+}
+
+{/* No-JS fallback */}
+<noscript>
+  <style>
+    .nav_toggle {
+      display: none;
+    }
+    .nav_menu {
+      grid-template-rows: 1fr;
+      visibility: visible;
+    }
+    .nav_menu_inner {
+      opacity: 1;
+    }
+  </style>
+</noscript>
+
+<script>
+  const nav = document.querySelector<HTMLElement>(".nav_wrap");
+  const toggle = nav?.querySelector<HTMLButtonElement>(".nav_toggle");
+
+  if (nav && toggle) {
+    const setOpen = (open: boolean) => {
+      nav.classList.toggle("open", open);
+      toggle.setAttribute("aria-expanded", String(open));
+    };
+
+    toggle.addEventListener("click", () => {
+      setOpen(toggle.getAttribute("aria-expanded") !== "true");
+    });
+
+    nav.querySelectorAll("a").forEach((link) => {
+      link.addEventListener("click", () => setOpen(false));
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && nav.classList.contains("open")) {
+        setOpen(false);
+        toggle.focus();
+      }
+    });
+
+    document.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!nav.classList.contains("open") || !(target instanceof Node)) return;
+      if (!nav.contains(target)) setOpen(false);
+    });
+
+    window
+      .matchMedia("(width >= 48rem)")
+      .addEventListener("change", (event) => {
+        if (event.matches) setOpen(false);
+      });
+  }
+</script>
+
+<style is:global>
+  @layer components {
+    .nav_wrap {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      justify-content: center;
+      padding-inline: var(--site-margin);
+      background-color: var(--background);
+      color: var(--text);
+      border-bottom: var(--border-width) solid var(--border);
+
+      &.overlap {
+        position: fixed;
+        inset-inline: 0;
+      }
+    }
+
+    .nav_inner {
+      width: 100%;
+      max-width: var(--max-width-main);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0 var(--space-6);
+    }
+
+    /* Bar height */
+    .nav_logo,
+    .nav_toggle {
+      min-height: var(--nav-height);
+    }
+
+    .nav_logo {
+      display: flex;
+      align-items: center;
+      width: 8.5rem;
+      transition: opacity var(--hover-duration) var(--hover-ease);
+      @media (hover: hover) {
+        &:hover {
+          opacity: 0.8;
+        }
+      }
+    }
+
+    .nav_toggle {
+      --_icon-width: 1.5rem;
+      --_bar-gap: 0.5rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 2.75rem;
+      margin-right: calc((2.75rem - var(--_icon-width)) / -2);
+      color: inherit;
+      border-radius: var(--radius-small);
+      transition: opacity var(--hover-duration) var(--hover-ease);
+      @media (hover: hover) {
+        &:hover {
+          opacity: 0.6;
+        }
+      }
+    }
+
+    .nav_toggle_icon {
+      position: relative;
+      display: block;
+      width: var(--_icon-width);
+      height: calc(var(--_bar-gap) + var(--border-width));
+      &::before,
+      &::after {
+        content: "";
+        position: absolute;
+        inset-inline: 0;
+        height: var(--border-width);
+        background-color: currentcolor;
+        transition: transform var(--open-duration) var(--open-ease);
+      }
+      &::before {
+        top: 0;
+      }
+      &::after {
+        top: var(--_bar-gap);
+      }
+    }
+
+    .nav_wrap.open .nav_toggle_icon {
+      &::before {
+        transform: translateY(calc(var(--_bar-gap) / 2)) rotate(45deg);
+      }
+      &::after {
+        transform: translateY(calc(var(--_bar-gap) / -2)) rotate(-45deg);
+      }
+    }
+
+    .nav_menu {
+      position: absolute;
+      top: 100%;
+      inset-inline: 0;
+      display: grid;
+      grid-template-rows: 0fr;
+      visibility: hidden;
+      max-height: calc(100svh - var(--nav-height));
+      overflow-x: clip;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      background-color: var(--background);
+      border-bottom: var(--border-width) solid var(--border);
+      transition:
+        grid-template-rows var(--open-duration) var(--open-ease),
+        visibility var(--open-duration) var(--open-ease);
+    }
+
+    .nav_menu_inner {
+      overflow: hidden;
+      opacity: 0;
+      transition: opacity var(--open-duration) var(--open-ease);
+    }
+
+    .nav_wrap.open .nav_menu {
+      grid-template-rows: 1fr;
+      visibility: visible;
+    }
+
+    .nav_wrap.open .nav_menu_inner {
+      opacity: 1;
+      overflow-y: auto;
+    }
+
+    .nav_links {
+      display: flex;
+      flex-direction: column;
+      padding: var(--space-2) var(--site-margin) var(--space-4);
+      font-size: var(--text-main);
+      font-weight: var(--primary-medium);
+      & > li + li {
+        border-top: var(--border-width) solid var(--border);
+      }
+    }
+
+    .nav_link {
+      display: block;
+      padding-block: var(--space-3);
+      color: color-mix(in lab, currentcolor 65%, transparent);
+      text-decoration: none;
+      text-underline-offset: 0.4em;
+      text-decoration-thickness: var(--border-width);
+      transition: color var(--hover-duration) var(--hover-ease);
+      &[aria-current="page"] {
+        color: var(--text);
+      }
+      @media (hover: hover) {
+        &:hover {
+          color: var(--brand-green);
+        }
+      }
+    }
+
+    .nav_actions {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-3) var(--site-margin) var(--space-4);
+      border-top: var(--border-width) solid var(--border);
+    }
+
+    .nav_github {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      color: var(--text-2);
+      font-size: var(--text-small);
+      font-weight: var(--primary-medium);
+      padding: 0.5rem 0.75rem;
+      border-radius: var(--radius-small);
+      border: var(--border-width) solid var(--border);
+      transition:
+        color var(--hover-duration) var(--hover-ease),
+        border-color var(--hover-duration) var(--hover-ease),
+        background-color var(--hover-duration) var(--hover-ease);
+      @media (hover: hover) {
+        &:hover {
+          color: var(--text);
+          border-color: var(--brand-green);
+          background-color: color-mix(in lab, var(--text) 5%, transparent);
+        }
+      }
+    }
+
+    .nav_cta {
+      font-size: var(--text-small);
+      padding: 0.5rem 1rem;
+    }
+
+    @media (width >= 56rem) {
+      .nav_toggle {
+        display: none;
+      }
+
+      .nav_menu {
+        position: static;
+        display: block;
+        visibility: visible;
+        background-color: transparent;
+        border-bottom: 0;
+        flex: 1;
+        margin-left: var(--space-6);
+      }
+
+      .nav_menu_inner {
+        overflow: visible;
+        opacity: 1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-4);
+      }
+
+      .nav_links {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        padding: 0;
+        gap: var(--space-4);
+        font-size: var(--text-small);
+        & > li + li {
+          border-top: 0;
+        }
+      }
+
+      .nav_actions {
+        padding: 0;
+        border-top: 0;
+        margin-left: auto;
+      }
+
+      .nav_link {
+        padding-block: 0;
+        &[aria-current="page"] {
+          color: var(--brand-green);
+          text-decoration: underline;
+        }
+      }
+    }
+  }
+</style>

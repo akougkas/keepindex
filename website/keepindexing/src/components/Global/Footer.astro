@@ -1,0 +1,251 @@
+---
+import Icon from "@/components/Media/Icon.astro";
+import logo from "@/assets/brand/keepindex-wordmark-light.svg";
+import { SITE_NAME, SITE_TAGLINE } from "@/consts.ts";
+
+interface Props {
+  /** Set to `false` to skip rendering this component and its children. */
+  render?: boolean;
+}
+
+const { render = true } = Astro.props;
+---
+
+{
+  render && (
+    <footer class="footer_wrap">
+      <div class="footer_inner">
+        <div class="footer_grid">
+          <div class="footer_brand">
+            <a class="footer_logo" href="/" aria-label={SITE_NAME}>
+              <Icon src={logo} variant="full-width" />
+            </a>
+            <p class="footer_tagline">{SITE_TAGLINE}</p>
+            <p class="footer_desc text-style-small">
+              Private, local-first federated search. Unifying self-hosted SearXNG, Obsidian vaults, local documents, and browser memory with verified citations and zero cloud fallback.
+            </p>
+            <div class="footer_domain_badge">
+              <span class="footer_dot" />
+              <span class="footer_domain_text">https://keepindex.ing</span>
+            </div>
+          </div>
+
+          <div class="footer_nav_group">
+            <p class="footer_nav_heading">Product</p>
+            <ul class="footer_nav_list">
+              <li><a class="footer_link" href="/features">Features</a></li>
+              <li><a class="footer_link" href="/inference">Local AI Runtimes</a></li>
+              <li><a class="footer_link" href="/architecture">System Architecture</a></li>
+              <li><a class="footer_link" href="/architecture#homelab">Homelab Clusters</a></li>
+              <li><a class="footer_link" href="/#demo">Interactive Demo</a></li>
+            </ul>
+          </div>
+
+          <div class="footer_nav_group">
+            <p class="footer_nav_heading">Developers & Docs</p>
+            <ul class="footer_nav_list">
+              <li><a class="footer_link" href="/docs">Quickstart Guide</a></li>
+              <li><a class="footer_link" href="/docs#cli"><code>keepidx</code> CLI</a></li>
+              <li><a class="footer_link" href="/docs#docker">Docker Compose</a></li>
+              <li><a class="footer_link" href="/docs#api">REST / SSE API</a></li>
+              <li>
+                <a
+                  class="footer_link"
+                  href="https://github.com/akougkas/keepindex"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  GitHub Repository ↗
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          <div class="footer_nav_group">
+            <p class="footer_nav_heading">Sovereignty</p>
+            <ul class="footer_nav_list">
+              <li><a class="footer_link" href="/privacy">Privacy Manifest</a></li>
+              <li><a class="footer_link" href="/privacy#threat-model">Threat Model</a></li>
+              <li><a class="footer_link" href="/privacy#sanitization">Credential Stripping</a></li>
+              <li><a class="footer_link" href="/inference#endpoint-policy">DNS-Free Policy</a></li>
+              <li><a class="footer_link" href="/docs#backup">State Backup</a></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="footer_bottom">
+          <p class="footer_copyright text-style-small">
+            &copy; <span id="year">{new Date().getFullYear()}</span> {SITE_NAME}. Open source under Apache 2.0 / MIT.
+          </p>
+          <div class="footer_badges">
+            <span class="footer_badge">Zero Telemetry</span>
+            <span class="footer_badge">100% Local Inference</span>
+            <span class="footer_badge">HSTS Preloaded</span>
+          </div>
+        </div>
+      </div>
+    </footer>
+  )
+}
+
+<script>
+  const year = document.querySelector<HTMLSpanElement>("#year");
+  if (year) {
+    year.textContent = new Date().getFullYear().toString();
+  }
+</script>
+
+<style is:global>
+  @layer components {
+    .footer_wrap {
+      display: flex;
+      justify-content: center;
+      padding-block: var(--section-space-medium) var(--section-space-small);
+      padding-inline: var(--site-margin);
+      background-color: var(--brand-ink);
+      color: var(--brand-ivory);
+      border-top: var(--border-width) solid var(--border);
+    }
+
+    .footer_inner {
+      width: 100%;
+      max-width: var(--max-width-main);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-7);
+    }
+
+    .footer_grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: var(--space-6);
+      @media (width >= 48rem) {
+        grid-template-columns: 2fr 1fr 1.2fr 1.1fr;
+        gap: var(--space-6);
+      }
+    }
+
+    .footer_brand {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+      max-width: 28rem;
+    }
+
+    .footer_logo {
+      display: block;
+      width: 8.5rem;
+      max-width: 100%;
+      transition: opacity var(--hover-duration) var(--hover-ease);
+      @media (hover: hover) {
+        &:hover {
+          opacity: 0.8;
+        }
+      }
+    }
+
+    .footer_tagline {
+      font-family: var(--display-family);
+      font-size: var(--text-large);
+      font-weight: var(--primary-bold);
+      color: var(--brand-ivory);
+    }
+
+    .footer_desc {
+      color: var(--brand-stone);
+      line-height: var(--line-height-large);
+    }
+
+    .footer_domain_badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.25rem 0.625rem;
+      border-radius: var(--radius-round);
+      background-color: color-mix(in lab, var(--brand-green) 12%, transparent);
+      border: var(--border-width) solid color-mix(in lab, var(--brand-green) 30%, transparent);
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--brand-green);
+      width: fit-content;
+    }
+
+    .footer_dot {
+      width: 0.375rem;
+      height: 0.375rem;
+      border-radius: 50%;
+      background-color: var(--brand-green);
+      box-shadow: 0 0 0.5rem var(--brand-green);
+    }
+
+    .footer_nav_group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+
+    .footer_nav_heading {
+      font-size: var(--text-small);
+      font-weight: var(--primary-bold);
+      color: var(--brand-ivory);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .footer_nav_list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+
+    .footer_link {
+      color: var(--brand-stone);
+      font-size: var(--text-small);
+      transition: color var(--hover-duration) var(--hover-ease);
+      @media (hover: hover) {
+        &:hover {
+          color: var(--brand-green);
+        }
+      }
+      code {
+        font-family: var(--font-mono);
+        color: var(--brand-ivory);
+      }
+    }
+
+    .footer_bottom {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: var(--space-4);
+      padding-top: var(--space-5);
+      border-top: var(--border-width) solid var(--border);
+      @media (width >= 48rem) {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+      }
+    }
+
+    .footer_copyright {
+      color: var(--brand-stone);
+    }
+
+    .footer_badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
+
+    .footer_badge {
+      font-size: 0.75rem;
+      font-weight: var(--primary-medium);
+      padding: 0.25rem 0.5rem;
+      border-radius: var(--radius-small);
+      background-color: color-mix(in lab, var(--brand-stone) 10%, transparent);
+      color: var(--brand-stone);
+      border: var(--border-width) solid color-mix(in lab, var(--brand-stone) 20%, transparent);
+    }
+  }
+</style>
+

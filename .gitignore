@@ -1,4 +1,5 @@
 .planning/
+.clio-coder/
 
 # Dependencies
 node_modules/

@@ -1,0 +1,420 @@
+---
+import Layout from "@/layouts/BaseLayout.astro";
+import Section from "@/components/Wrapper/Section.astro";
+import ContentWrapper from "@/components/Wrapper/ContentWrapper.astro";
+import Heading from "@/components/Typography/Heading.astro";
+import Eyebrow from "@/components/Typography/Eyebrow.astro";
+import Paragraph from "@/components/Typography/Paragraph.astro";
+import ButtonWrapper from "@/components/Wrapper/ButtonWrapper.astro";
+import Button from "@/components/Button.astro";
+import Grid from "@/components/Wrapper/Grid.astro";
+import Card from "@/components/Item/Card.astro";
+import Accordion from "@/components/Interactive/Accordion.astro";
+import AccordionItem from "@/components/Interactive/AccordionItem.astro";
+---
+
+<Layout
+  title="Local AI Inference & Model Providers"
+  description="Connect KeepIndex to llama.cpp, vLLM, Ollama, MLX, or Triton. Strict DNS-free local endpoint policies reject public cloud APIs and exfiltration."
+  theme="dark"
+>
+  {/* 1. Inference Hero */}
+  <Section paddingTop="large" paddingBottom="medium">
+    <ContentWrapper variant="stack" centered={true}>
+      <Eyebrow variant="tag">100% Local Inference</Eyebrow>
+      <Heading tag="h1" variant="display" maxWidth={26}>
+        Your hardware. Your models. <span style="color: var(--brand-green);">Zero cloud fallback.</span>
+      </Heading>
+      <Paragraph maxWidth={54} variant="large">
+        KeepIndex refuses public inference endpoints. Prompts and private evidence never touch OpenAI, Anthropic, or Google servers. Point KeepIndex at models running on your homelab, workstation, or Apple Silicon Mac.
+      </Paragraph>
+      <ButtonWrapper>
+        <Button element="link" href="/docs" emphasis="primary">Docker Setup</Button>
+        <Button element="link" href="#policy" emphasis="secondary">Network Policy</Button>
+      </ButtonWrapper>
+    </ContentWrapper>
+  </Section>
+
+  {/* 2. Supported Local Engines */}
+  <Section paddingTop="medium" paddingBottom="large">
+    <ContentWrapper variant="stack">
+      <Eyebrow>Supported Engines</Eyebrow>
+      <Heading tag="h2" variant="h1" maxWidth={30}>
+        Turnkey compatibility with local AI runtimes
+      </Heading>
+      <Paragraph maxWidth={50}>
+        KeepIndex communicates via two high-performance local transports: OpenAI-compatible wire format and native Ollama API.
+      </Paragraph>
+
+      <Grid medium={2} large={4} class="inference_grid">
+        <Card
+          eyebrow="ENGINE 01 · GGUF & CUDA"
+          heading="llama.cpp / llama-server"
+          text="The reference local backend. Default endpoint http://127.0.0.1:8080. Lightweight, blazing fast prefill, and supports state-of-the-art quantized GGUF models on CPU, CUDA, and Metal."
+          theme="dark"
+        />
+
+        <Card
+          eyebrow="ENGINE 02 · HIGH THROUGHPUT"
+          heading="vLLM"
+          text="PagedAttention inference engine for high-concurrency homelabs. Point LLM_URL at the vLLM server root; KeepIndex queries /v1/models and /v1/chat/completions natively."
+          theme="dark"
+        />
+
+        <Card
+          eyebrow="ENGINE 03 · TURNKEY RUNTIME"
+          heading="Ollama"
+          text="Configure KEEPINDEX_INFERENCE_PROVIDER=ollama. KeepIndex natively queries /api/tags for model catalogs and /api/chat with streaming, discarding private reasoning frames."
+          theme="dark"
+        />
+
+        <Card
+          eyebrow="ENGINE 04 · APPLE SILICON"
+          heading="MLX-LM"
+          text="Optimized for M1/M2/M3/M4 unified memory architecture. Run massive 32B+ models at high token rates directly on Apple silicon with an OpenAI-compatible MLX server."
+          theme="dark"
+        />
+
+        <Card
+          eyebrow="ENGINE 05 · RADIX ATTENTION"
+          heading="SGLang"
+          text="Fast execution with cache reuse across related queries. Point LLM_URL at the local server root to leverage automatic KV cache optimization."
+          theme="dark"
+        />
+
+        <Card
+          eyebrow="ENGINE 06 · DESKTOP GUI"
+          heading="LM Studio"
+          text="Enable the local server feature in LM Studio. KeepIndex communicates over loopback with zero cloud telemetry or account requirements."
+          theme="dark"
+        />
+
+        <Card
+          eyebrow="ENGINE 07 · AMD ROCM & VULKAN"
+          heading="Lemonade Server"
+          text="Designed for heterogeneous setups including AMD Radeon GPUs on Linux/Windows. Exposes an OpenAI-compatible endpoint with micro-batch tuning."
+          theme="dark"
+        />
+
+        <Card
+          eyebrow="ENGINE 08 · CLUSTER ENSEMBLE"
+          heading="NVIDIA Triton"
+          text="Deploy a local OpenAI-compatible chat frontend in front of a Triton model repository to serve grounded search from multi-GPU clusters."
+          theme="dark"
+        />
+      </Grid>
+    </ContentWrapper>
+  </Section>
+
+  {/* 3. The Strict Anti-Exfiltration Endpoint Policy */}
+  <Section paddingTop="medium" paddingBottom="large" id="policy">
+    <ContentWrapper variant="stack">
+      <Eyebrow>Security Boundary</Eyebrow>
+      <Heading tag="h2" variant="h1" maxWidth={30}>
+        DNS-Free Endpoint Policy
+      </Heading>
+      <Paragraph maxWidth={54}>
+        KeepIndex rejects public IP addresses and cloud APIs at the network validation layer before any socket is opened.
+      </Paragraph>
+
+      <div class="policy_grid">
+        <div class="policy_card allowed">
+          <div class="policy_header">
+            <span class="policy_icon">✓</span>
+            <strong>Permitted Local Endpoints</strong>
+          </div>
+          <ul class="policy_list">
+            <li><code>localhost</code>, <code>127.0.0.0/8</code>, and IPv6 loopback (<code>::1</code>)</li>
+            <li>RFC1918 private IPv4 subnets (<code>192.168.0.0/16</code>, <code>10.0.0.0/8</code>, <code>172.16.0.0/12</code>)</li>
+            <li>Tailscale shared CGNAT subnet (<code>100.64.0.0/10</code>)</li>
+            <li>Single-label container hostnames (e.g., <code>http://inference:8080</code>)</li>
+            <li>Docker host gateway (<code>host.docker.internal</code>)</li>
+            <li>Local suffixes: <code>.localhost</code>, <code>.local</code>, <code>.lan</code>, <code>.internal</code>, <code>.home.arpa</code></li>
+          </ul>
+        </div>
+
+        <div class="policy_card blocked">
+          <div class="policy_header">
+            <span class="policy_icon">✕</span>
+            <strong>Strictly Rejected Endpoints</strong>
+          </div>
+          <ul class="policy_list">
+            <li>Public IPv4 and IPv6 internet addresses</li>
+            <li>Public DNS names (even if resolving to private IPs)</li>
+            <li>OpenAI, Anthropic, and Google hostnames explicitly</li>
+            <li>URL usernames, passwords, and sensitive query strings</li>
+            <li>Redirects from allowed local servers to public cloud hosts</li>
+            <li>Non-HTTP(S) protocol schemes</li>
+          </ul>
+        </div>
+      </div>
+    </ContentWrapper>
+  </Section>
+
+  {/* 4. Hardware Sizing Guide */}
+  <Section paddingTop="medium" paddingBottom="large">
+    <ContentWrapper variant="stack">
+      <Eyebrow>Hardware Sizing</Eyebrow>
+      <Heading tag="h2" variant="h1" maxWidth={28}>
+        Model Recommendations by Hardware
+      </Heading>
+      <Paragraph maxWidth={52}>
+        KeepIndex does not download multi-gigabyte models automatically because hardware capabilities differ. Here are proven model recommendations.
+      </Paragraph>
+
+      <div class="hardware_table_wrap">
+        <table class="hardware_table">
+          <thead>
+            <tr>
+              <th scope="col">Hardware Tier</th>
+              <th scope="col">VRAM / RAM</th>
+              <th scope="col">Recommended Model</th>
+              <th scope="col">Quantization</th>
+              <th scope="col">Expected Speed</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Laptop / CPU Only</strong></td>
+              <td>16 GB RAM</td>
+              <td>Qwen2.5-3B-Instruct / Llama-3.2-3B</td>
+              <td>GGUF Q4_K_M</td>
+              <td>15–25 tokens/s</td>
+            </tr>
+            <tr>
+              <td><strong>Mid GPU / Homelab Node</strong></td>
+              <td>8–12 GB VRAM (RTX 3060/4070)</td>
+              <td>Qwen2.5-7B-Instruct / Mistral-7B-v0.3</td>
+              <td>GGUF Q4_K_M / Q5_K_M</td>
+              <td>45–80 tokens/s</td>
+            </tr>
+            <tr>
+              <td><strong>Dedicated Inference Server</strong></td>
+              <td>16–24 GB VRAM (RTX 3090/4090/7900XTX)</td>
+              <td>Qwen2.5-14B-Instruct / Command-R-v01</td>
+              <td>AWQ / EXL2 / Q6_K</td>
+              <td>60–110 tokens/s</td>
+            </tr>
+            <tr>
+              <td><strong>Apple Silicon (Max/Ultra)</strong></td>
+              <td>36–128 GB Unified Memory</td>
+              <td>Qwen2.5-32B-Instruct / Llama-3.3-70B</td>
+              <td>MLX 4-bit / 8-bit</td>
+              <td>25–45 tokens/s</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </ContentWrapper>
+  </Section>
+
+  {/* 5. How to Launch llama.cpp with Docker */}
+  <Section paddingTop="medium" paddingBottom="large">
+    <ContentWrapper variant="stack">
+      <Eyebrow>Quick Command</Eyebrow>
+      <Heading tag="h2" variant="h1" maxWidth={30}>
+        Sample Provider Launch Command
+      </Heading>
+      <Paragraph maxWidth={52}>
+        Here is a typical shape for starting <code>llama-server</code> on the host machine so that KeepIndex inside Docker can reach it:
+      </Paragraph>
+
+      <div class="command_card">
+        <div class="command_header">
+          <span class="command_title">bash — Host terminal</span>
+        </div>
+        <pre class="command_code"><code>llama-server \
+  --host 0.0.0.0 \
+  --port 8080 \
+  --model /models/qwen2.5-7b-instruct-q4_k_m.gguf \
+  --ctx-size 8192 \
+  --n-gpu-layers 99</code></pre>
+        <p class="command_note">
+          KeepIndex in Docker connects to <code>http://host.docker.internal:8080</code> automatically. Restrict that port on external firewall interfaces so it is reachable only on your private LAN.
+        </p>
+      </div>
+    </ContentWrapper>
+  </Section>
+
+  {/* 6. FAQ */}
+  <Section paddingTop="medium" paddingBottom="large">
+    <ContentWrapper variant="stack">
+      <Eyebrow>Questions</Eyebrow>
+      <Heading tag="h2" variant="h1">Inference FAQs</Heading>
+
+      <Accordion single={true} openFirst={true}>
+        <AccordionItem heading="Why doesn't KeepIndex provide a toggle for OpenAI or Anthropic?">
+          <p>
+            By design and brand philosophy. The moment a software system offers a cloud API fallback, private documents and sensitive search queries will inevitably leak during misconfigurations, network outages, or convenience toggles. KeepIndex maintains an inviolable boundary: sovereign hardware only.
+          </p>
+        </AccordionItem>
+
+        <AccordionItem heading="Can I use reasoning models like DeepSeek-R1 or QwQ?">
+          <p>
+            Yes. KeepIndex accepts reasoning models. However, native streaming keeps the synthesized answer and citation multiset while deliberately discarding raw internal reasoning tokens from the customer-facing answer, preventing reasoning tokens from leaking unverified facts.
+          </p>
+        </AccordionItem>
+
+        <AccordionItem heading="Does KeepIndex ship a hardcoded model name?">
+          <p>
+            No. When <code>LLM_MODEL</code> is empty, KeepIndex queries the local server's advertised model catalog (via <code>/v1/models</code> or <code>/api/tags</code>) and selects the first available model. You can specify a preferred model or fallback model at any time in your environment.
+          </p>
+        </AccordionItem>
+      </Accordion>
+    </ContentWrapper>
+  </Section>
+</Layout>
+
+<style is:global>
+  @layer components {
+    .inference_grid {
+      margin-top: var(--space-4);
+    }
+
+    .policy_grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: var(--space-4);
+      margin-top: var(--space-4);
+      @media (width >= 48rem) {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .policy_card {
+      background-color: var(--dark-900);
+      border-radius: var(--radius-small);
+      padding: var(--space-4);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+
+      &.allowed {
+        border: var(--border-width) solid color-mix(in lab, var(--brand-green) 35%, transparent);
+        .policy_icon {
+          color: var(--brand-green);
+        }
+      }
+
+      &.blocked {
+        border: var(--border-width) solid rgba(255, 92, 92, 0.35);
+        .policy_icon {
+          color: #ff5c5c;
+        }
+      }
+    }
+
+    .policy_header {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-family: var(--display-family);
+      font-size: 1.1rem;
+      color: var(--brand-ivory);
+    }
+
+    .policy_icon {
+      font-size: 1.25rem;
+      font-weight: 900;
+    }
+
+    .policy_list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      font-size: var(--text-small);
+      color: var(--brand-stone);
+
+      li {
+        line-height: var(--line-height-medium);
+        code {
+          font-family: var(--font-mono);
+          color: var(--brand-ivory);
+          background-color: var(--dark-800);
+          padding: 0.1em 0.3em;
+          border-radius: 0.25em;
+        }
+      }
+    }
+
+    .hardware_table_wrap {
+      width: 100%;
+      overflow-x: auto;
+      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 14%, transparent);
+      border-radius: var(--radius-main);
+      background-color: var(--dark-900);
+      margin-top: var(--space-4);
+    }
+
+    .hardware_table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: var(--text-small);
+    }
+
+    .hardware_table th {
+      padding: var(--space-3) var(--space-4);
+      background-color: var(--dark-800);
+      font-family: var(--display-family);
+      font-weight: 700;
+      color: var(--brand-ivory);
+      border-bottom: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 12%, transparent);
+    }
+
+    .hardware_table td {
+      padding: var(--space-3) var(--space-4);
+      border-bottom: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 8%, transparent);
+      color: var(--brand-stone);
+      strong {
+        color: var(--brand-ivory);
+      }
+    }
+
+    .command_card {
+      background-color: var(--dark-900);
+      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 14%, transparent);
+      border-radius: var(--radius-small);
+      overflow: hidden;
+      margin-top: var(--space-4);
+    }
+
+    .command_header {
+      background-color: var(--dark-800);
+      padding: var(--space-2) var(--space-4);
+      border-bottom: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 10%, transparent);
+    }
+
+    .command_title {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--brand-stone);
+    }
+
+    .command_code {
+      padding: var(--space-4);
+      font-family: var(--font-mono);
+      font-size: 0.875rem;
+      color: var(--brand-green);
+      line-height: 1.6;
+      margin: 0;
+      overflow-x: auto;
+    }
+
+    .command_note {
+      padding: var(--space-3) var(--space-4);
+      background-color: color-mix(in lab, var(--brand-ink) 80%, transparent);
+      border-top: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 8%, transparent);
+      font-size: var(--text-small);
+      color: var(--brand-stone);
+      margin: 0;
+      code {
+        font-family: var(--font-mono);
+        color: var(--brand-ivory);
+      }
+    }
+  }
+</style>

@@ -1,0 +1,386 @@
+---
+interface Props {
+  /** Set to `false` to skip rendering this component and its children. */
+  render?: boolean;
+}
+
+const { render = true } = Astro.props;
+---
+
+{
+  render && (
+    <div class="cli-terminal_wrap">
+      <div class="cli-terminal_window">
+        {/* Terminal Titlebar */}
+        <div class="cli-terminal_bar">
+          <div class="cli-terminal_controls">
+            <span class="cli-terminal_ctrl red" />
+            <span class="cli-terminal_ctrl yellow" />
+            <span class="cli-terminal_ctrl green" />
+          </div>
+          <div class="cli-terminal_title">user@homelab: ~ · keepidx v0.1.0</div>
+          <div class="cli-terminal_tabs" role="tablist">
+            <button class="cli-terminal_tab is-active" data-cmd="doctor" type="button">
+              keepidx doctor
+            </button>
+            <button class="cli-terminal_tab" data-cmd="start" type="button">
+              keepidx start
+            </button>
+            <button class="cli-terminal_tab" data-cmd="status" type="button">
+              keepidx status --json
+            </button>
+            <button class="cli-terminal_tab" data-cmd="curl" type="button">
+              curl /api/ask
+            </button>
+          </div>
+        </div>
+
+        {/* Terminal Body */}
+        <div class="cli-terminal_body">
+          {/* Command 1: doctor */}
+          <div class="cli-terminal_screen is-active" id="term-doctor">
+            <div class="cli-terminal_prompt_line">
+              <span class="cli-terminal_prompt">user@blade:~$</span>
+              <span class="cli-terminal_cmd">keepidx doctor</span>
+            </div>
+            <pre class="cli-terminal_output"><code><span class="term-dim">┌  KeepIndex System Inspection &amp; Doctor</span>
+<span class="term-dim">│</span>
+<span class="term-green">✓</span> Docker Engine (Compose v2.30.1) ......... healthy
+<span class="term-green">✓</span> Runtime Port 5173 (KeepIndex Web/API) ... available (loopback)
+<span class="term-green">✓</span> Runtime Port 8888 (SearXNG Ingress) ..... available (loopback)
+<span class="term-green">✓</span> SQLite WAL Storage (/data/keepindex.db) .. mounted &amp; write-safe
+<span class="term-dim">│</span>
+<span class="term-dim">├─ Local Inference Probe (LLM_URL=http://127.0.0.1:8080)</span>
+<span class="term-green">✓</span> Local endpoint reachability .............. loopback (DNS-free allow)
+<span class="term-green">✓</span> Compatible provider detected ............. llama.cpp / llama-server
+<span class="term-green">✓</span> Advertised model ......................... Qwen2.5-7B-Instruct-GGUF
+<span class="term-green">✓</span> Public internet leak protection .......... active (0 outbound model leaks)
+<span class="term-dim">│</span>
+<span class="term-dim">├─ Knowledge &amp; Browser Memory Access</span>
+<span class="term-green">✓</span> Obsidian root (/vault) ................... 342 notes indexed
+<span class="term-green">✓</span> Document tools (pdftotext, pandoc) ....... available in runtime
+<span class="term-green">✓</span> Chromium/Firefox history profile ......... opt-in FTS5 (sanitized URLs only)
+<span class="term-dim">│</span>
+<span class="term-green">└  System ready. No warnings. Start with: keepidx start</span></code></pre>
+          </div>
+
+          {/* Command 2: start */}
+          <div class="cli-terminal_screen" id="term-start">
+            <div class="cli-terminal_prompt_line">
+              <span class="cli-terminal_prompt">user@blade:~$</span>
+              <span class="cli-terminal_cmd">keepidx start</span>
+            </div>
+            <pre class="cli-terminal_output"><code><span class="term-dim">[+] Building KeepIndex container with Bun 1.2...</span>
+[+] Running 2/2
+ <span class="term-green">✔</span> Container keepindex-searxng-1    <span class="term-green">Started</span> (bound 127.0.0.1:8888)
+ <span class="term-green">✔</span> Container keepindex-keepindex-1  <span class="term-green">Started</span> (bound 127.0.0.1:5173)
+
+<span class="term-green">┌─────────────────────────────────────────────────────────────┐</span>
+<span class="term-green">│</span>  <span class="term-bold">KeepIndex is live.</span>                                         <span class="term-green">│</span>
+<span class="term-green">│</span>  Local Web UI:       <span class="term-green">http://127.0.0.1:5173</span>                  <span class="term-green">│</span>
+<span class="term-green">│</span>  Private API:        <span class="term-green">http://127.0.0.1:5173/api</span>              <span class="term-green">│</span>
+<span class="term-green">│</span>  Self-hosted Search: <span class="term-green">http://127.0.0.1:8888</span>                  <span class="term-green">│</span>
+<span class="term-green">│</span>  Storage:            <span class="term-dim">Named Docker Volume 'keepindex-data'</span>   <span class="term-green">│</span>
+<span class="term-green">│</span>  Inference Target:   <span class="term-dim">host.docker.internal:8080 (llama.cpp)</span>  <span class="term-green">│</span>
+<span class="term-green">└─────────────────────────────────────────────────────────────┘</span>
+<span class="term-dim">Stop anytime with Ctrl+C. Signal is cleanly forwarded to Compose.</span></code></pre>
+          </div>
+
+          {/* Command 3: status */}
+          <div class="cli-terminal_screen" id="term-status">
+            <div class="cli-terminal_prompt_line">
+              <span class="cli-terminal_prompt">user@blade:~$</span>
+              <span class="cli-terminal_cmd">keepidx status --json</span>
+            </div>
+            <pre class="cli-terminal_output"><code>&#123;
+  <span class="term-blue">"status"</span>: <span class="term-green">"healthy"</span>,
+  <span class="term-blue">"version"</span>: <span class="term-green">"0.1.0"</span>,
+  <span class="term-blue">"database"</span>: &#123;
+    <span class="term-blue">"path"</span>: <span class="term-green">"/data/keepindex.sqlite"</span>,
+    <span class="term-blue">"mode"</span>: <span class="term-green">"wal"</span>,
+    <span class="term-blue">"indexed_chunks"</span>: <span class="term-yellow">14820</span>,
+    <span class="term-blue">"query_records"</span>: <span class="term-yellow">312</span>
+  &#125;,
+  <span class="term-blue">"inference"</span>: &#123;
+    <span class="term-blue">"provider"</span>: <span class="term-green">"llama.cpp"</span>,
+    <span class="term-blue">"endpoint"</span>: <span class="term-green">"http://127.0.0.1:8080"</span>,
+    <span class="term-blue">"model"</span>: <span class="term-green">"Qwen2.5-7B-Instruct-GGUF"</span>,
+    <span class="term-blue">"cloud_fallback"</span>: <span class="term-green">false</span>,
+    <span class="term-blue">"public_traffic_blocked"</span>: <span class="term-green">true</span>
+  &#125;,
+  <span class="term-blue">"grounding_gate"</span>: &#123;
+    <span class="term-blue">"min_coverage_threshold"</span>: <span class="term-yellow">0.80</span>,
+    <span class="term-blue">"average_coverage_last_100"</span>: <span class="term-yellow">0.942</span>,
+    <span class="term-blue">"rejected_hallucinations"</span>: <span class="term-yellow">14</span>
+  &#125;
+&#125;</code></pre>
+          </div>
+
+          {/* Command 4: curl */}
+          <div class="cli-terminal_screen" id="term-curl">
+            <div class="cli-terminal_prompt_line">
+              <span class="cli-terminal_prompt">user@blade:~$</span>
+              <span class="cli-terminal_cmd">curl -N http://127.0.0.1:5173/api/ask \</span>
+            </div>
+            <div class="cli-terminal_prompt_sub">
+              &gt; -H 'Content-Type: application/json' \
+            </div>
+            <div class="cli-terminal_prompt_sub">
+              &gt; -d '&#123;&quot;query&quot;: &quot;traefik reverse proxy homelab&quot;, &quot;target&quot;: &quot;all&quot;&#125;'
+            </div>
+            <pre class="cli-terminal_output"><code><span class="term-dim">event: vitals
+data: &#123;&quot;model&quot;:&quot;Qwen2.5-7B&quot;,&quot;evidence_count&quot;:4,&quot;mode&quot;:&quot;grounded&quot;&#125;</span>
+
+<span class="term-dim">event: chunk
+data: &#123;&quot;text&quot;:&quot;To configure Traefik securely [1], bind external ports &quot;&#125;</span>
+
+<span class="term-dim">event: chunk
+data: &#123;&quot;text&quot;:&quot;to the Cloudflare tunnel and internal dashboards to Tailscale [2].&quot;&#125;</span>
+
+<span class="term-dim">event: ground_gate
+data: &#123;&quot;coverage&quot;:0.96,&quot;out_of_pack_citations&quot;:0,&quot;verdict&quot;:&quot;PASSED&quot;&#125;</span>
+
+<span class="term-green">event: done
+data: &#123;&quot;query_id&quot;:&quot;q-88a21f&quot;,&quot;persisted_to_sqlite&quot;:true&#125;</span></code></pre>
+          </div>
+        </div>
+
+        {/* Terminal Footer with Copy Button */}
+        <div class="cli-terminal_foot">
+          <span class="cli-terminal_hint">⚡ Tip: Click any tab above to see real KeepIndex CLI outputs.</span>
+          <button class="cli-terminal_copy_btn" id="term-copy" type="button">
+            <span>Copy command</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+<script>
+  const termRoot = document.querySelector(".cli-terminal_wrap");
+  if (termRoot) {
+    const tabs = termRoot.querySelectorAll<HTMLButtonElement>(".cli-terminal_tab");
+    const screens = {
+      doctor: termRoot.querySelector<HTMLElement>("#term-doctor"),
+      start: termRoot.querySelector<HTMLElement>("#term-start"),
+      status: termRoot.querySelector<HTMLElement>("#term-status"),
+      curl: termRoot.querySelector<HTMLElement>("#term-curl"),
+    };
+    const copyBtn = termRoot.querySelector<HTMLButtonElement>("#term-copy");
+
+    const commands: Record<string, string> = {
+      doctor: "keepidx doctor",
+      start: "keepidx start",
+      status: "keepidx status --json",
+      curl: `curl -N http://127.0.0.1:5173/api/ask -H 'Content-Type: application/json' -d '{"query": "traefik reverse proxy homelab", "target": "all"}'`,
+    };
+
+    let activeCmd = "doctor";
+
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", () => {
+        const cmd = tab.dataset.cmd as keyof typeof screens;
+        if (!cmd) return;
+        activeCmd = cmd;
+
+        tabs.forEach((t) => t.classList.remove("is-active"));
+        tab.classList.add("is-active");
+
+        Object.values(screens).forEach((s) => s?.classList.remove("is-active"));
+        screens[cmd]?.classList.add("is-active");
+      });
+    });
+
+    copyBtn?.addEventListener("click", async () => {
+      const text = commands[activeCmd];
+      if (text) {
+        await navigator.clipboard.writeText(text);
+        copyBtn.textContent = "Copied!";
+        setTimeout(() => {
+          copyBtn.textContent = "Copy command";
+        }, 1500);
+      }
+    });
+  }
+</script>
+
+<style is:global>
+  @layer components {
+    .cli-terminal_wrap {
+      width: 100%;
+      margin-block: var(--space-4);
+    }
+
+    .cli-terminal_window {
+      background-color: var(--dark-900);
+      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 14%, transparent);
+      border-radius: var(--radius-main);
+      overflow: hidden;
+      box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.4);
+    }
+
+    .cli-terminal_bar {
+      background-color: var(--dark-800);
+      border-bottom: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 10%, transparent);
+      padding: var(--space-2) var(--space-4);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-3);
+    }
+
+    .cli-terminal_controls {
+      display: flex;
+      gap: 0.375rem;
+    }
+
+    .cli-terminal_ctrl {
+      width: 0.75rem;
+      height: 0.75rem;
+      border-radius: 50%;
+      &.red {
+        background-color: #ff5f56;
+      }
+      &.yellow {
+        background-color: #ffbd2e;
+      }
+      &.green {
+        background-color: #27c93f;
+      }
+    }
+
+    .cli-terminal_title {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--brand-stone);
+      margin-right: auto;
+    }
+
+    .cli-terminal_tabs {
+      display: flex;
+      gap: 0.25rem;
+      background-color: var(--dark-900);
+      padding: 0.2rem;
+      border-radius: var(--radius-small);
+      border: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 8%, transparent);
+    }
+
+    .cli-terminal_tab {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--brand-stone);
+      background: transparent;
+      border: 0;
+      padding: 0.25rem 0.5rem;
+      border-radius: calc(var(--radius-small) - 0.125rem);
+      cursor: pointer;
+      transition: all var(--hover-duration) var(--hover-ease);
+
+      &.is-active {
+        background-color: var(--dark-700);
+        color: var(--brand-green);
+      }
+      &:hover:not(.is-active) {
+        color: var(--brand-ivory);
+      }
+    }
+
+    .cli-terminal_body {
+      padding: var(--space-4);
+      min-height: 18rem;
+    }
+
+    .cli-terminal_screen {
+      display: none;
+      &.is-active {
+        display: block;
+      }
+    }
+
+    .cli-terminal_prompt_line {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.875rem;
+      margin-bottom: var(--space-3);
+    }
+
+    .cli-terminal_prompt {
+      color: var(--brand-green);
+    }
+
+    .cli-terminal_cmd {
+      color: var(--brand-ivory);
+      font-weight: 700;
+    }
+
+    .cli-terminal_prompt_sub {
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+      color: var(--brand-stone);
+      margin-left: 1.5rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .cli-terminal_output {
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+      line-height: 1.5;
+      color: var(--brand-ivory);
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-x: auto;
+    }
+
+    .term-green {
+      color: var(--brand-green);
+    }
+    .term-dim {
+      color: var(--brand-stone);
+    }
+    .term-yellow {
+      color: #fde047;
+    }
+    .term-blue {
+      color: #93c5fd;
+    }
+    .term-bold {
+      font-weight: 700;
+    }
+
+    .cli-terminal_foot {
+      background-color: var(--dark-800);
+      border-top: var(--border-width) solid color-mix(in lab, var(--brand-ivory) 10%, transparent);
+      padding: var(--space-2) var(--space-4);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-3);
+    }
+
+    .cli-terminal_hint {
+      font-size: 0.75rem;
+      color: var(--brand-stone);
+      font-family: var(--font-mono);
+    }
+
+    .cli-terminal_copy_btn {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--brand-ink);
+      background-color: var(--brand-green);
+      border: 0;
+      padding: 0.35rem 0.75rem;
+      border-radius: var(--radius-small);
+      font-weight: 700;
+      cursor: pointer;
+      transition: all var(--hover-duration) var(--hover-ease);
+      &:hover {
+        background-color: var(--brand-ivory);
+      }
+    }
+  }
+</style>

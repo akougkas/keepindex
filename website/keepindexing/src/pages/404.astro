@@ -1,0 +1,33 @@
+---
+import Layout from "@/layouts/BaseLayout.astro";
+import Section from "@/components/Wrapper/Section.astro";
+import Heading from "@/components/Typography/Heading.astro";
+import Paragraph from "@/components/Typography/Paragraph.astro";
+import ButtonWrapper from "@/components/Wrapper/ButtonWrapper.astro";
+import Button from "@/components/Button.astro";
+import Eyebrow from "@/components/Typography/Eyebrow.astro";
+import ContentWrapper from "@/components/Wrapper/ContentWrapper.astro";
+---
+
+<Layout
+  title="Page not found"
+  description="The page you're looking for doesn't exist inside your keep."
+  theme="dark"
+  overlap={true}
+>
+  <Section paddingTop="navoverlap" paddingBottom="navoverlap" class="flex-grow">
+    <ContentWrapper centered={true}>
+      <Eyebrow variant="tag">404 · Unresolved Evidence Path</Eyebrow>
+      <Heading variant="h2" tag="h1" maxWidth={22}>
+        This path does not exist inside your keep.
+      </Heading>
+      <Paragraph variant="large" maxWidth={36}>
+        The requested URL could not be resolved against the local index. Your search history, collections, and local files remain safe and intact.
+      </Paragraph>
+      <ButtonWrapper>
+        <Button element="link" href="/" emphasis="primary">Return to Home</Button>
+        <Button element="link" href="/docs" emphasis="secondary">View Documentation</Button>
+      </ButtonWrapper>
+    </ContentWrapper>
+  </Section>
+</Layout>
