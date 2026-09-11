@@ -179,13 +179,20 @@ export async function extractIndexableFile(input: {
     }
   }
 
+function compactFilePath(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, '/')
+  const parts = normalized.split('/').filter(Boolean)
+  if (parts.length === 0) return filePath
+  return parts.slice(-3).join('/')
+}
+
   const modified = Number.isFinite(input.modifiedAt) ? new Date(input.modifiedAt).toISOString() : 'unknown'
   return {
     text: [
       '[File metadata]',
       `Name: ${input.fileName}`,
       `Extension: ${extension || '(none)'}`,
-      `Path: ${input.path}`,
+      `Path: ${compactFilePath(input.path)}`,
       `Size: ${input.size} bytes`,
       `Modified: ${modified}`,
     ].join('\n'),

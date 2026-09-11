@@ -583,10 +583,11 @@ function formatWebSourcesForPrompt(results: SearchResult[]): string {
 }
 
 function formatLocalSourcesForPrompt(
-  results: Array<{ filePath: string; fileName: string; content: string; startLine?: number; endLine?: number }>
+  results: Array<{ filePath: string; fileName: string; content: string; startLine?: number; endLine?: number; metadataOnly?: boolean }>
 ): string {
-  if (results.length === 0) return ''
-  return `\n\nLocal Knowledge:\n${results
+  const citable = results.filter((r) => !r.metadataOnly)
+  if (citable.length === 0) return ''
+  return `\n\nLocal Knowledge:\n${citable
     .map((r, i) => {
       const lineTag = r.startLine ? ` (L${r.startLine}${r.endLine && r.endLine !== r.startLine ? `-${r.endLine}` : ''})` : ''
       return `[L${i + 1}] ${truncateText(r.fileName || basename(r.filePath), 100)} @ ${compactFilePath(r.filePath)}${lineTag} — ${truncateText(r.content, MAX_LOCAL_SNIPPET_CHARS)}`
@@ -2985,6 +2986,7 @@ function searchKnowledge(q: string, limit = 10, inheritedOptions: LocalSearchOpt
   let rejectedLowCoverage = 0
 
   for (const ch of knowledgeIndex) {
+    if (ch.metadata?.metadataOnly) continue
     if (!localChunkMatchesOptions(ch, options)) continue
     let bm25Score = 0
     let matchedWeight = 0
@@ -5623,6 +5625,7 @@ app.on('POST', ['/api/chat', '/api/ask'], async (c) => {
     })
     const results = webForPrompt.map(toPublicSource)
     const localForPrompt = localResults
+      .filter((r) => !r.metadataOnly)
       .map((r) => ({ filePath: r.filePath, fileName: r.fileName, content: r.content, startLine: r.startLine, endLine: r.endLine, resourceId: r.resourceId, resourceLabel: r.resourceLabel, indexedAt: r.indexedAt }))
 
     const finishPromptAssembly = executionTrace.start('prompt_assembly')

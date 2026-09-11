@@ -984,6 +984,7 @@ export type FusionLocalEvidence = {
   queryCoverage?: number
   /** Distinctive query-term count used to choose the retriever's coverage floor. */
   queryTermCount?: number
+  metadataOnly?: boolean
 }
 
 function substantiallyOverlapsLocalRange(
@@ -1202,6 +1203,7 @@ export function selectFusedEvidence<
 
   const usableLocalSources = localWithScores
     .filter(({ source, normalizedScore, queryCoverage }) =>
+      source.metadataOnly !== true &&
       normalizedScore >= minLocalNormalizedScore &&
       (source.score == null || (Number.isFinite(source.score) && source.score >= 0.05)) &&
       (source.queryCoverage == null || (

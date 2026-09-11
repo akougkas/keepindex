@@ -900,6 +900,19 @@ describe('selectFusedEvidence', () => {
     expect(selected.local).toHaveLength(8)
     expect(selected.counts.selectedLocal).toBe(8)
   })
+
+  it('excludes metadataOnly chunks from citable local evidence (KIX-03)', () => {
+    const selected = selectFusedEvidence(
+      [],
+      [
+        { filePath: '/vault/real.md', score: 1.0, normalizedScore: 1.0, queryCoverage: 1.0, queryTermCount: 2, metadataOnly: false },
+        { filePath: '/vault/stub.pdf', score: 1.0, normalizedScore: 1.0, queryCoverage: 1.0, queryTermCount: 2, metadataOnly: true },
+      ],
+      { limit: 5 }
+    )
+
+    expect(selected.local.map((item) => item.filePath)).toEqual(['/vault/real.md'])
+  })
 })
 
 describe('toPublicSource', () => {

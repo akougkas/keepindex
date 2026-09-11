@@ -43,9 +43,9 @@ Connect [[Browser Memory|history]] with [[Local Vault#Notes]].
     })
   })
 
-  test('keeps unsupported files searchable through metadata', async () => {
+  test('keeps unsupported files searchable through metadata and compacts path', async () => {
     const extracted = await extractIndexableFile({
-      path: '/tmp/diagram.sketch',
+      path: '/home/secretuser/vaults/confidential/diagram.sketch',
       fileName: 'diagram.sketch',
       size: 2048,
       modifiedAt: 1_700_000_000_000,
@@ -55,5 +55,7 @@ Connect [[Browser Memory|history]] with [[Local Vault#Notes]].
     expect(extracted.metadata.metadataOnly).toBe(true)
     expect(extracted.text).toContain('Name: diagram.sketch')
     expect(extracted.text).toContain('Size: 2048 bytes')
+    expect(extracted.text).toContain('Path: vaults/confidential/diagram.sketch')
+    expect(extracted.text).not.toContain('/home/secretuser')
   })
 })
