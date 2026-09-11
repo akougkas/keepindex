@@ -11,6 +11,7 @@ import {
   deriveRankingQueries,
   domainQuality,
   hostOf,
+  mergeRankingQueries,
   queryRelevance,
   queryTokenCoverage,
   rankWebResults,
@@ -583,6 +584,25 @@ describe('rankWebResults', () => {
     expect(ranked).toHaveLength(2)
     expect(ranked[0].url).toBe('https://two.example.com/b')
     expect(ranked[0].engines).toHaveLength(3)
+  })
+
+  it('does not inflate engine agreement bonus when multiple branches return the same engine (KIX-12)', () => {
+    const ranked = rankWebResults('kubernetes ingress', [
+      result({ url: 'https://one.example.com/a', title: 'kubernetes ingress guide', snippet: 'ingress', rank: 2, engines: ['bing'], mergedCount: 3 }),
+      result({ url: 'https://two.example.com/b', title: 'kubernetes ingress guide', snippet: 'ingress', rank: 2, engines: ['bing'], mergedCount: 1 }),
+    ], NOW)
+
+    expect(ranked).toHaveLength(2)
+    expect(ranked[0].relevanceScore).toBe(ranked[1].relevanceScore)
+  })
+
+  it('pins primary query as element 0 in mergeRankingQueries regardless of alphabetization (KIX-11)', () => {
+    const primaryQuery = 'zzz primary query'
+    const otherQueries = Array.from({ length: 20 }, (_, i) => `aaa query branch ${String(i).padStart(2, '0')}`)
+    const merged = mergeRankingQueries(primaryQuery, otherQueries)
+    expect(merged).toBeDefined()
+    expect(merged![0]).toBe('zzz primary query')
+    expect(merged!.length).toBeLessThanOrEqual(16)
   })
 
   it('produces a stable score independent of a missing rank field', () => {

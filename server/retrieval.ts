@@ -642,19 +642,41 @@ function normalizeTitleKey(title: string): string {
     .trim()
 }
 
-function mergeRankingQueries(...groups: Array<string[] | undefined>): string[] | undefined {
+export function mergeRankingQueries(
+  pinnedQueryOrGroup?: string | string[],
+  ...remainingGroups: Array<string[] | undefined>
+): string[] | undefined {
+  let pinnedQuery: string | undefined
+  let groups: Array<string[] | undefined>
+
+  if (typeof pinnedQueryOrGroup === 'string') {
+    pinnedQuery = pinnedQueryOrGroup
+    groups = remainingGroups
+  } else {
+    pinnedQuery = undefined
+    groups = [pinnedQueryOrGroup, ...remainingGroups]
+  }
+
   const byKey = new Map<string, string>()
+  const pinnedNormalized = pinnedQuery?.replace(/\s+/g, ' ').trim().slice(0, 1000)
+  const pinnedKey = pinnedNormalized?.toLowerCase()
+
   for (const query of groups.flatMap((group) => group ?? [])) {
     const normalized = query.replace(/\s+/g, ' ').trim().slice(0, 1000)
     if (!normalized) continue
     const key = normalized.toLowerCase()
+    if (key === pinnedKey) continue
     const existing = byKey.get(key)
     if (!existing || normalized < existing) byKey.set(key, normalized)
   }
   const merged = [...byKey.entries()]
-    .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
-    .slice(0, 16)
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+    .slice(0, pinnedNormalized ? 15 : 16)
     .map(([, value]) => value)
+
+  if (pinnedNormalized) {
+    merged.unshift(pinnedNormalized)
+  }
   return merged.length > 0 ? merged : undefined
 }
 
@@ -862,9 +884,9 @@ export function queryRelevance(query: string, result: RankedSearchResult): numbe
 
 /** 0..1, saturating at four engines. Cross-engine agreement is a strong prior. */
 function engineAgreement(result: RankedResult): number {
-  const engineCount = Math.max(result.engines?.length ?? 0, result.mergedCount)
-  if (engineCount <= 1) return 0
-  return Math.min(1, (engineCount - 1) / 3)
+  const distinctEngines = new Set(result.engines ?? []).size
+  if (distinctEngines <= 1) return 0
+  return Math.min(1, (distinctEngines - 1) / 3)
 }
 
 /**
@@ -927,7 +949,11 @@ export function rankWebResults(
     const agreement = isHistory ? 0 : engineAgreement(result)
     const recency = isHistory ? 0 : recencyScore(result.publishedDate, nowMs)
     const preference = hostPreferenceScore(result.url, hostPreferences)
+    const originatingQueries = result.rankingQueries && result.rankingQueries.length > 0
+      ? result.rankingQueries
+      : [query]
     const rankingQueries = mergeRankingQueries(
+      query,
       deriveRankingQueries(query),
       result.rankingQueries?.flatMap((rankingQuery) => deriveRankingQueries(rankingQuery))
     ) ?? [query]

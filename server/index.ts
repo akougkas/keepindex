@@ -5495,20 +5495,19 @@ app.on('POST', ['/api/chat', '/api/ask'], async (c) => {
     } else {
       finishEmbeddingRerank('skipped', { mode: 'keyword' })
     }
-    if (localRetrievalQueries.length > 1) {
-      const quotedTitle = /["“”]([^"“”]{3,160})["“”]/.exec(retrievalQuery)?.[1]
-        ?.replace(/\.md$/i, '')
-        .trim()
-        .toLowerCase()
-      if (quotedTitle) {
-        // An explicitly named vault document defines the local scope. Keep the
-        // same array (and its WeakMap diagnostics) while removing tangential
-        // notes that happened to match generic comparison terms.
-        const scoped = localCandidates.filter((candidate) =>
-          candidate.fileName.replace(/\.md$/i, '').trim().toLowerCase() === quotedTitle
-        )
-        if (scoped.length > 0) localCandidates.splice(0, localCandidates.length, ...scoped)
-      }
+    const quotedDocumentTitle = /["“”]([^"“”]{3,160})["“”]/.exec(retrievalQuery)?.[1]
+      ?.replace(/\.md$/i, '')
+      .trim()
+      .toLowerCase()
+    const hasQuotedDocumentTitle = Boolean(quotedDocumentTitle)
+    if (quotedDocumentTitle) {
+      // An explicitly named vault document defines the local scope. Keep the
+      // same array (and its WeakMap diagnostics) while removing tangential
+      // notes that happened to match generic comparison terms.
+      const scoped = localCandidates.filter((candidate) =>
+        candidate.fileName.replace(/\.md$/i, '').trim().toLowerCase() === quotedDocumentTitle
+      )
+      if (scoped.length > 0) localCandidates.splice(0, localCandidates.length, ...scoped)
     }
     const localSearchLatencyMs = Date.now() - localSearchStartedAt
     const [historyCandidates, rawResults] = await Promise.all([historyPromise, rawResultsPromise])
@@ -5591,11 +5590,7 @@ app.on('POST', ['/api/chat', '/api/ask'], async (c) => {
       /\bretry[\s-]*after\b/i.test(retrievalQuery)
     const focusedWebVerification =
       /\blatest stable\b/i.test(retrievalQuery) || normativeHttpVerification
-    const evidenceLimit = localRetrievalQueries.length > 1
-      ? 10
-      : focusedWebVerification
-        ? 12
-        : 12
+    const evidenceLimit = hasQuotedDocumentTitle ? 10 : 12
     const fusedPack = selectFusedEvidence(ranked, localCandidates, {
       limit: evidenceLimit,
       webWeight: 1,
@@ -5603,7 +5598,7 @@ app.on('POST', ['/api/chat', '/api/ask'], async (c) => {
       // When the user names one saved document and asks about several aspects,
       // four passages from that file are evidence diversity, not crowding. The
       // extra passage prevents a chunk boundary from hiding a requested aspect.
-      maxPerFile: localRetrievalQueries.length > 1 ? 4 : MAX_CHUNKS_PER_FILE,
+      maxPerFile: hasQuotedDocumentTitle ? 4 : MAX_CHUNKS_PER_FILE,
     })
     finishRankingAndFusion('ok', {
       selectedWeb: fusedPack.counts.selectedWeb,
