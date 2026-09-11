@@ -19,6 +19,7 @@ services:
       # container reaches the same private host service through Docker's local
       # host gateway; a private LLM_URL can override it explicitly.
       LLM_URL: "${LLM_URL:-http://host.docker.internal:8080}"
+      LLM_API_KEY: "${LLM_API_KEY:-}"
       LLM_MODEL: "${LLM_MODEL:-}"
       LLM_FALLBACK_MODEL: "${LLM_FALLBACK_MODEL:-}"
       KEEPINDEX_EMBEDDING_MODEL: "${KEEPINDEX_EMBEDDING_MODEL:-}"

@@ -292,6 +292,14 @@ describe('ranking signals', () => {
     )).not.toBe('fixed/token')
   })
 
+  it('preserves misspelled person queries while adding biography and affiliation searches', () => {
+    expect(deriveDiscoveryQueries('ho is Marina Stavrakantonaki')).toEqual([
+      'ho is Marina Stavrakantonaki',
+      'Marina Stavrakantonaki official biography',
+      'Marina Stavrakantonaki profile affiliation',
+    ])
+  })
+
   it('resolves Retry-After status questions to bounded official RFC identities', () => {
     expect(deriveAuthoritativeSourceSeeds('Is Retry-After required for 429 and allowed for 503?'))
       .toEqual(expect.arrayContaining([

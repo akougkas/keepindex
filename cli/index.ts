@@ -5,6 +5,7 @@ import { dirname, extname, parse as parsePath, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   inspectInferenceEndpoint,
+  LOCAL_INFERENCE_REDIRECT_POLICY,
   resolveInferenceAdapter,
   type InferenceAdapter,
 } from '../server/inference-endpoint-policy'
@@ -66,7 +67,7 @@ export type CliDependencies = {
   writeErr?: (text: string) => void
   fetch?: FetchLike
   commandVersion?: (command: string, args: string[]) => CommandResult
-  probeUrl?: (url: string, headers?: Record<string, string>) => Promise<boolean>
+  probeUrl?: (url: string, headers?: Record<string, string>, redirect?: RequestInit['redirect']) => Promise<boolean>
   probePort?: (port: number) => Promise<PortState>
   runCompose?: (projectRoot: string, detached: boolean) => Promise<number>
   openUrl?: (url: string, platform: NodeJS.Platform) => Promise<boolean>
@@ -384,13 +385,14 @@ function appendEndpoint(base: string, pathname: string): string {
   return `${base.replace(/\/+$/, '')}/${pathname.replace(/^\/+/, '')}`
 }
 
-async function fetchWithTimeout(fetcher: FetchLike, url: string, timeoutMs = 3500, headers?: Record<string, string>): Promise<Response> {
+async function fetchWithTimeout(fetcher: FetchLike, url: string, timeoutMs = 3500, headers?: Record<string, string>, redirect?: RequestInit['redirect']): Promise<Response> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
   try {
     return await fetcher(url, {
       headers: { Accept: 'application/json', 'User-Agent': `KeepIndex/${KEEPINDEX_VERSION} keepidx`, ...headers },
       signal: controller.signal,
+      redirect,
     })
   } finally {
     clearTimeout(timeout)
@@ -408,9 +410,9 @@ function defaultCommandVersion(command: string, args: string[]): CommandResult {
   return { ok: true, detail: firstLine || 'available' }
 }
 
-async function defaultProbeUrl(fetcher: FetchLike, url: string, headers?: Record<string, string>): Promise<boolean> {
+async function defaultProbeUrl(fetcher: FetchLike, url: string, headers?: Record<string, string>, redirect?: RequestInit['redirect']): Promise<boolean> {
   try {
-    return (await fetchWithTimeout(fetcher, url, 2500, headers)).ok
+    return (await fetchWithTimeout(fetcher, url, 2500, headers, redirect)).ok
   } catch {
     return false
   }
@@ -593,7 +595,7 @@ async function runDoctor(
   fetcher: FetchLike,
 ): Promise<{ code: number; output: string }> {
   const commandVersion = dependencies.commandVersion ?? defaultCommandVersion
-  const probeUrl = dependencies.probeUrl ?? ((url, headers) => defaultProbeUrl(fetcher, url, headers))
+  const probeUrl = dependencies.probeUrl ?? ((url, headers, redirect) => defaultProbeUrl(fetcher, url, headers, redirect))
   const probePort = dependencies.probePort ?? defaultProbePort
   const checks: DoctorCheck[] = []
 
@@ -670,10 +672,8 @@ async function runDoctor(
   })
 
   const llmApiKey = env.LLM_API_KEY?.trim()
-    || env.LITELLM_API_KEY?.trim()
-    || env.KEEPINDEX_LLM_API_KEY?.trim()
 
-  type EndpointEntry = { label: string; base: string; probes: string[]; headers?: Record<string, string> }
+  type EndpointEntry = { label: string; base: string; probes: string[]; headers?: Record<string, string>; redirect?: RequestInit['redirect'] }
   const endpoints: EndpointEntry[] = []
   if (appUrl) endpoints.push({ label: 'KeepIndex port', base: appUrl, probes: [appendEndpoint(appUrl, '/api/health')] })
   if (searxngUrl) endpoints.push({ label: 'SearXNG port', base: searxngUrl, probes: [appendEndpoint(searxngUrl, '/healthz')] })
@@ -682,6 +682,7 @@ async function runDoctor(
       label: 'Local inference port',
       base: llmUrl,
       headers: llmApiKey ? { Authorization: `Bearer ${llmApiKey}` } : undefined,
+      redirect: LOCAL_INFERENCE_REDIRECT_POLICY,
       probes: inferenceAdapter.requested === 'auto'
         ? [appendEndpoint(llmUrl, '/v1/models'), appendEndpoint(llmUrl, '/api/tags')]
         : [appendEndpoint(llmUrl, inferenceAdapter.modelsPath)],
@@ -691,7 +692,7 @@ async function runDoctor(
   const reachability = new Map<string, boolean>()
   for (const endpoint of endpoints) {
     for (const probe of endpoint.probes) {
-      const reachable = await probeUrl(probe, endpoint.headers)
+      const reachable = await probeUrl(probe, endpoint.headers, endpoint.redirect)
       reachability.set(probe, reachable)
       if (reachable) break
     }

@@ -177,8 +177,6 @@ function boundedEnvInt(raw: string | undefined, fallback: number, minimum: numbe
 const SEARXNG_URL = process.env.SEARXNG_URL || 'http://127.0.0.1:8888'
 const LLM_URL = requireLocalInferenceEndpoint(process.env.LLM_URL || 'http://127.0.0.1:8080')
 const LLM_API_KEY = process.env.LLM_API_KEY?.trim()
-  || process.env.LITELLM_API_KEY?.trim()
-  || readKeepIndexEnvironment('LLM_API_KEY')
 const EMBEDDING_MODEL = readKeepIndexEnvironment('EMBEDDING_MODEL') || ''
 const INFERENCE_TRANSPORT = new LocalInferenceTransport(LLM_URL, resolveInferenceAdapter(), undefined, LLM_API_KEY)
 const WEB_SEARCH_PROVIDER = 'searxng'
@@ -903,23 +901,18 @@ function normalizeServerModels(data: unknown): ServerModelInfo[] {
   return models
 }
 
+function findAdvertisedModel(models: ServerModelInfo[], requested: string): ServerModelInfo | undefined {
+  if (!requested) return undefined
+  return models.find((model) => model.id === requested)
+    ?? models.find((model) => model.id.endsWith(`/${requested}`))
+}
+
 function adoptServerModels(models: ServerModelInfo[]): void {
   if (models.length === 0) return
   knownModels = models
   const advertisedIds = new Set(models.map((model) => model.id))
   if (!advertisedIds.has(activeDefaultModel)) {
-    if (DEFAULT_MODEL) {
-      if (advertisedIds.has(DEFAULT_MODEL)) {
-        activeDefaultModel = DEFAULT_MODEL
-        return
-      }
-      const matching = models.find((m) => m.id === DEFAULT_MODEL || m.id.endsWith(`/${DEFAULT_MODEL}`))
-      if (matching) {
-        activeDefaultModel = matching.id
-        return
-      }
-    }
-    activeDefaultModel = models[0].id
+    activeDefaultModel = findAdvertisedModel(models, DEFAULT_MODEL)?.id ?? models[0].id
   }
 }
 
@@ -1881,64 +1874,57 @@ function extractSourceExcerptsFromPack(sourcePack: string): Map<string, string> 
   return excerpts
 }
 
+function citationSupportSegments(text: string): string[] {
+  return normalizeGroundingProse(text)
+    .replace(/^[ \t]*#{1,6}[ \t].*$/gm, '\n\n')
+    .split(
+      /(?<=[.!?])\s+(?!\[\s*L?\d)|(?<=[.!?]\s?\[[^\]]{1,16}\])\s+(?=[A-Z])|\n{2,}|\n(?=[ \t]*(?:[-*+]|\d+[.)])[ \t])|\n(?=[ \t]*\|)/
+    )
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+}
+
 function verifyCitationLexicalSupport(
   repairedText: string,
   originalText: string,
   sourcePack: string
 ): { supported: boolean; addedCount: number } {
-  const originalIds = new Set(extractCitationIds(originalText))
-  const repairedIds = extractCitationIds(repairedText)
-  const newlyAddedIds = repairedIds.filter((id) => !originalIds.has(id))
-
-  if (newlyAddedIds.length > 8) {
-    return { supported: false, addedCount: newlyAddedIds.length }
+  // Track claim/citation occurrences, not just identifiers. An existing [1]
+  // grants no authority to repeat it on another claim or move it there.
+  const originalPairs = new Map<string, number>()
+  const claimText = (segment: string) => segment.replace(CITATION_GROUP_PATTERN, '')
+    .replace(/\s+([.,!?;:])/g, '$1').replace(/\s+/g, ' ').trim()
+  const pairKey = (claim: string, id: string) => JSON.stringify([claim, id])
+  for (const segment of citationSupportSegments(originalText)) {
+    for (const id of extractCitationIds(segment)) {
+      const key = pairKey(claimText(segment), id)
+      originalPairs.set(key, (originalPairs.get(key) ?? 0) + 1)
+    }
   }
-  if (newlyAddedIds.length === 0) {
-    return { supported: true, addedCount: 0 }
+
+  const additions: Array<{ claim: string; id: string }> = []
+  for (const segment of citationSupportSegments(repairedText)) {
+    const claim = claimText(segment)
+    for (const id of extractCitationIds(segment)) {
+      const key = pairKey(claim, id)
+      const remaining = originalPairs.get(key) ?? 0
+      if (remaining > 0) originalPairs.set(key, remaining - 1)
+      else additions.push({ claim, id })
+    }
   }
 
+  const addedCount = additions.length
+  if (addedCount > 8) return { supported: false, addedCount }
   const excerpts = extractSourceExcerptsFromPack(sourcePack)
-  const normalizedProse = normalizeGroundingProse(repairedText)
-  const segments = normalizedProse
-    .replace(/^[ \t]*#{1,6}[ \t].*$/gm, '\n\n')
-    .split(
-      /(?<=[.!?])\s+(?!\[\s*L?\d)|(?<=[.!?]\s?\[[^\]]{1,16}\])\s+(?=[A-Z])|\n{2,}|\n(?=[ \t]*(?:[-*+]|\d+[.)])[ \t])|\n(?=[ \t]*\|)/
-    )
-    .map((s) => s.trim())
-    .filter(Boolean)
-
-  const verifiedAddedIds = new Set<string>()
-
-  for (const segment of segments) {
-    const segmentIds = extractCitationIds(segment)
-    const addedInSegment = segmentIds.filter((id) => !originalIds.has(id))
-    if (addedInSegment.length === 0) continue
-
-    const segmentTokens = tokenizeQuery(segment)
-    if (segmentTokens.length === 0) continue
-
-    for (const addedId of addedInSegment) {
-      const excerpt = excerpts.get(addedId)
-      if (!excerpt) {
-        return { supported: false, addedCount: newlyAddedIds.length }
-      }
-      const excerptTokens = tokenizeQuery(excerpt)
-      const excerptTokenSet = new Set(excerptTokens)
-      const overlappingTokens = segmentTokens.filter((t) => excerptTokenSet.has(t))
-      if (overlappingTokens.length === 0) {
-        return { supported: false, addedCount: newlyAddedIds.length }
-      }
-      verifiedAddedIds.add(addedId)
+  for (const { claim, id } of additions) {
+    const excerpt = excerpts.get(id)
+    if (!excerpt) return { supported: false, addedCount }
+    const excerptTokens = new Set(tokenizeQuery(excerpt))
+    if (!tokenizeQuery(claim).some((token) => excerptTokens.has(token))) {
+      return { supported: false, addedCount }
     }
   }
-
-  for (const addedId of newlyAddedIds) {
-    if (!verifiedAddedIds.has(addedId)) {
-      return { supported: false, addedCount: newlyAddedIds.length }
-    }
-  }
-
-  return { supported: true, addedCount: newlyAddedIds.length }
+  return { supported: true, addedCount }
 }
 
 async function repairCitationCoverage(options: {
@@ -3727,7 +3713,7 @@ async function fetchDiscoverySearchResults(
   for (let i = 0; i < boundedQueries.length; i++) {
     const query = boundedQueries[i]
     if (i > 0) {
-      await new Promise((resolve) => setTimeout(resolve, 300))
+      await delayWithSignal(300, signal)
     }
     const outcome = await fetchSearchResults(query, focus, countPerQuery, signal)
     outcomes.push(outcome)
@@ -4085,17 +4071,17 @@ async function removeKnowledgeResource(id: string): Promise<boolean> {
 }
 
 app.get('/api/health', async (c) => {
-  const checkFetch = async (url: string, redirect: RequestInit['redirect'] = 'follow') => {
+  const checkFetch = async (url: string, inference = false) => {
     const startedAt = Date.now()
     try {
       const headers: Record<string, string> = { Accept: 'application/json' }
-      if (LLM_API_KEY && url.startsWith(LLM_URL)) {
+      if (LLM_API_KEY && inference) {
         headers.Authorization = `Bearer ${LLM_API_KEY}`
       }
       const response = await fetch(url, {
         signal: AbortSignal.timeout(2500),
         headers,
-        redirect,
+        redirect: inference ? LOCAL_INFERENCE_REDIRECT_POLICY : 'follow',
       })
       return { ok: response.ok, latencyMs: Date.now() - startedAt, response }
     } catch {
@@ -4119,7 +4105,7 @@ app.get('/api/health', async (c) => {
     checkFetch(`${SEARXNG_URL}/healthz`),
     checkInferenceModels(),
     activeSlotsPath
-      ? checkFetch(`${LLM_URL}${activeSlotsPath}`, LOCAL_INFERENCE_REDIRECT_POLICY)
+      ? checkFetch(`${LLM_URL}${activeSlotsPath}`, true)
       : Promise.resolve({ ok: false, latencyMs: 0, response: null }),
     pingDatabase().then((ok) => ({ ok })).catch(() => ({ ok: false })),
     ensureKnowledgeLoaded().catch(() => undefined),
@@ -4269,14 +4255,14 @@ app.post('/api/models/select', async (c) => {
   const requested = normalizeModel(body.model)
   if (typeof body.model !== 'string' || !body.model.trim()) return c.json({ error: 'model required', activeModel: activeDefaultModel }, 400)
 
-  let matching = knownModels.find((model) => model.id === requested || model.id.endsWith(`/${requested}`))
+  let matching = findAdvertisedModel(knownModels, requested)
   if (!matching) {
     try {
       const response = await INFERENCE_TRANSPORT.models(AbortSignal.timeout(4000))
       if (response.ok) {
         const models = normalizeServerModels(await response.json())
         if (models.length > 0) knownModels = models
-        matching = knownModels.find((model) => model.id === requested || model.id.endsWith(`/${requested}`))
+        matching = findAdvertisedModel(knownModels, requested)
       }
     } catch {
       // Keep the last-known model catalog during a temporary server outage.
@@ -7243,6 +7229,8 @@ export const __test__ = {
   parseResearchPlan,
   normalizeIncomingQuery,
   normalizeModel,
+  findAdvertisedModel,
+  delayWithSignal,
   hasPrivateHistoryProvenance,
   hydratePublicWebEvidence,
   extractLlmDelta,

@@ -1085,10 +1085,38 @@ Local Knowledge:
 
   it('permits repair when no new citations are introduced', () => {
     const original = 'SQLite uses a write-ahead log [1].'
-    const repaired = 'SQLite uses a write-ahead log for concurrency [1].'
+    const repaired = original
     const res = verifyCitationLexicalSupport(repaired, original, sampleSourcePack)
     expect(res.supported).toBe(true)
     expect(res.addedCount).toBe(0)
+  })
+
+  it('rejects repeating an existing citation on an unrelated claim', () => {
+    const original = 'SQLite uses a write-ahead log [1]. Penguins migrate annually.'
+    const repaired = 'SQLite uses a write-ahead log [1]. Penguins migrate annually [1].'
+    expect(verifyCitationLexicalSupport(repaired, original, sampleSourcePack))
+      .toEqual({ supported: false, addedCount: 1 })
+  })
+
+  it('checks a citation moved onto a different claim even when its count is unchanged', () => {
+    const original = 'SQLite uses a write-ahead log [1]. Penguins migrate annually.'
+    const repaired = 'SQLite uses a write-ahead log. Penguins migrate annually [1].'
+    expect(verifyCitationLexicalSupport(repaired, original, sampleSourcePack))
+      .toEqual({ supported: false, addedCount: 1 })
+  })
+
+  it('accepts and counts a repeated citation when its new claim is supported', () => {
+    const original = 'SQLite uses a write-ahead log [1]. WAL improves concurrency.'
+    const repaired = 'SQLite uses a write-ahead log [1]. WAL improves concurrency [1].'
+    expect(verifyCitationLexicalSupport(repaired, original, sampleSourcePack))
+      .toEqual({ supported: true, addedCount: 1 })
+  })
+
+  it('applies the addition cap to repeated identifiers', () => {
+    const original = 'SQLite uses a write-ahead log [1].'
+    const repaired = original + ' WAL improves concurrency [1].'.repeat(9)
+    expect(verifyCitationLexicalSupport(repaired, original, sampleSourcePack))
+      .toEqual({ supported: false, addedCount: 9 })
   })
 
   it('accepts repair when newly added citation has lexical overlap with claim', () => {
@@ -1117,14 +1145,9 @@ Local Knowledge:
 
   it('caps newly introduced identifiers to at most 8 per pass', () => {
     const original = 'Text without citations.'
-    // Model introduces 9 citations
-    const repaired = 'Text [1] [1] [1] [1] [1] [1] [1] [1] [1].'
-    // Note newlyAddedIds checks unique/multiset or list:
-    // With distinct or repeated IDs:
     const repairedMany = 'A [1]. B [2]. C [3]. D [4]. E [5]. F [6]. G [7]. H [8]. I [9].'
     const res = verifyCitationLexicalSupport(repairedMany, original, sampleSourcePack)
     expect(res.supported).toBe(false)
     expect(res.addedCount).toBeGreaterThan(8)
   })
 })
-
