@@ -1355,6 +1355,7 @@ export type GroundingAssessment = {
   sourceCount: number
   invalidCitations: string[]
   note: string
+  addedCitationCount?: number
 }
 
 /**
@@ -1831,6 +1832,76 @@ function pruneUncitedResearchClaims(options: {
     : null
 }
 
+function extractSourceExcerptsFromPack(sourcePack: string): Map<string, string> {
+  const excerpts = new Map<string, string>()
+  const regex = /\[([Ll]?\d+)\]\s+(?:.+?)\s+—\s+([\s\S]+?)(?=(?:\n\s*\[[Ll]?\d+\]|\n\n(?:Local Knowledge|Web Sources):|$))/g
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(sourcePack)) !== null) {
+    excerpts.set(match[1].toUpperCase(), match[2])
+  }
+  return excerpts
+}
+
+function verifyCitationLexicalSupport(
+  repairedText: string,
+  originalText: string,
+  sourcePack: string
+): { supported: boolean; addedCount: number } {
+  const originalIds = new Set(extractCitationIds(originalText))
+  const repairedIds = extractCitationIds(repairedText)
+  const newlyAddedIds = repairedIds.filter((id) => !originalIds.has(id))
+
+  if (newlyAddedIds.length > 8) {
+    return { supported: false, addedCount: newlyAddedIds.length }
+  }
+  if (newlyAddedIds.length === 0) {
+    return { supported: true, addedCount: 0 }
+  }
+
+  const excerpts = extractSourceExcerptsFromPack(sourcePack)
+  const normalizedProse = normalizeGroundingProse(repairedText)
+  const segments = normalizedProse
+    .replace(/^[ \t]*#{1,6}[ \t].*$/gm, '\n\n')
+    .split(
+      /(?<=[.!?])\s+(?!\[\s*L?\d)|(?<=[.!?]\s?\[[^\]]{1,16}\])\s+(?=[A-Z])|\n{2,}|\n(?=[ \t]*(?:[-*+]|\d+[.)])[ \t])|\n(?=[ \t]*\|)/
+    )
+    .map((s) => s.trim())
+    .filter(Boolean)
+
+  const verifiedAddedIds = new Set<string>()
+
+  for (const segment of segments) {
+    const segmentIds = extractCitationIds(segment)
+    const addedInSegment = segmentIds.filter((id) => !originalIds.has(id))
+    if (addedInSegment.length === 0) continue
+
+    const segmentTokens = tokenizeQuery(segment)
+    if (segmentTokens.length === 0) continue
+
+    for (const addedId of addedInSegment) {
+      const excerpt = excerpts.get(addedId)
+      if (!excerpt) {
+        return { supported: false, addedCount: newlyAddedIds.length }
+      }
+      const excerptTokens = tokenizeQuery(excerpt)
+      const excerptTokenSet = new Set(excerptTokens)
+      const overlappingTokens = segmentTokens.filter((t) => excerptTokenSet.has(t))
+      if (overlappingTokens.length === 0) {
+        return { supported: false, addedCount: newlyAddedIds.length }
+      }
+      verifiedAddedIds.add(addedId)
+    }
+  }
+
+  for (const addedId of newlyAddedIds) {
+    if (!verifiedAddedIds.has(addedId)) {
+      return { supported: false, addedCount: newlyAddedIds.length }
+    }
+  }
+
+  return { supported: true, addedCount: newlyAddedIds.length }
+}
+
 async function repairCitationCoverage(options: {
   text: string
   sourcePack: string
@@ -1968,7 +2039,13 @@ ${options.text}
     options.webSourceCount,
     options.localSourceCount
   )
+
+  const lexicalSupport = strategy === 'source-aware'
+    ? verifyCitationLexicalSupport(repaired, options.text, options.sourcePack)
+    : { supported: true, addedCount: 0 }
+
   if (
+    !lexicalSupport.supported ||
     lengthRatio < (strategy === 'safe-cleanup' ? 0.85 : 0.65) ||
     lengthRatio > (strategy === 'safe-cleanup' ? 1.15 : 1.35) ||
     !keptStructure ||
@@ -1977,6 +2054,7 @@ ${options.text}
     repairedQuality.citationCoveragePct <= originalQuality.citationCoveragePct
   ) return null
 
+  repairedQuality.addedCitationCount = lexicalSupport.addedCount
   return { text: repaired, quality: repairedQuality }
 }
 
@@ -7029,6 +7107,8 @@ export const __test__ = {
   shortEntityQuery,
   localChunkMatchesOptions,
   localCoverageFloor,
+  extractSourceExcerptsFromPack,
+  verifyCitationLexicalSupport,
 }
 
 export default app

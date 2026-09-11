@@ -84,6 +84,7 @@ export type GroundingAssessment = {
   sourceCount: number
   invalidCitations: string[]
   note: string
+  addedCitationCount?: number
 }
 
 export type ResearchStep = {

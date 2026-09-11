@@ -18,6 +18,8 @@ const {
   cleanKnowledgeText,
   chunkText,
   MAX_CHUNKS_PER_FILE,
+  extractSourceExcerptsFromPack,
+  verifyCitationLexicalSupport,
 } = __test__
 
 describe('compact-model failure cases', () => {
@@ -1042,3 +1044,68 @@ describe('search engine health', () => {
     expect(getEngineHealth().down).toEqual([{ engine: 'plain-name', reason: 'unavailable' }])
   })
 })
+
+describe('citation lexical support gating (KIX-02)', () => {
+  const sampleSourcePack = `Web Sources:
+[1] SQLite WAL Documentation — The write-ahead log (WAL) provides concurrency improvements over rollback journal. (https://sqlite.org/wal.html)
+
+[2] HTTP Semantics RFC 9110 — The 503 Service Unavailable status code indicates that the server is currently unable to handle the request. (https://rfc-editor.org/rfc/rfc9110)
+
+Local Knowledge:
+[L1] indexing.ts @ src/indexing.ts — In-memory BM25 index calculates IDF statistics over chunked documents.`
+
+  it('extracts source excerpts from prompt source pack', () => {
+    const excerpts = extractSourceExcerptsFromPack(sampleSourcePack)
+    expect(excerpts.has('1')).toBe(true)
+    expect(excerpts.get('1')).toContain('write-ahead log')
+    expect(excerpts.has('2')).toBe(true)
+    expect(excerpts.get('2')).toContain('Service Unavailable')
+    expect(excerpts.has('L1')).toBe(true)
+    expect(excerpts.get('L1')).toContain('BM25 index')
+  })
+
+  it('permits repair when no new citations are introduced', () => {
+    const original = 'SQLite uses a write-ahead log [1].'
+    const repaired = 'SQLite uses a write-ahead log for concurrency [1].'
+    const res = verifyCitationLexicalSupport(repaired, original, sampleSourcePack)
+    expect(res.supported).toBe(true)
+    expect(res.addedCount).toBe(0)
+  })
+
+  it('accepts repair when newly added citation has lexical overlap with claim', () => {
+    const original = 'KeepIndex uses BM25. SQLite supports WAL [1].'
+    const repaired = 'KeepIndex uses BM25 index [L1]. SQLite supports WAL [1].'
+    const res = verifyCitationLexicalSupport(repaired, original, sampleSourcePack)
+    expect(res.supported).toBe(true)
+    expect(res.addedCount).toBe(1)
+  })
+
+  it('rejects repair when newly added citation lacks lexical overlap with the claim', () => {
+    const original = 'KeepIndex uses vector embeddings. SQLite supports WAL [1].'
+    // Model adds [2] (HTTP Semantics) to vector embeddings claim
+    const repaired = 'KeepIndex uses vector embeddings [2]. SQLite supports WAL [1].'
+    const res = verifyCitationLexicalSupport(repaired, original, sampleSourcePack)
+    expect(res.supported).toBe(false)
+    expect(res.addedCount).toBe(1)
+  })
+
+  it('rejects repair when newly added citation references a non-existent identifier', () => {
+    const original = 'SQLite supports WAL.'
+    const repaired = 'SQLite supports WAL [99].'
+    const res = verifyCitationLexicalSupport(repaired, original, sampleSourcePack)
+    expect(res.supported).toBe(false)
+  })
+
+  it('caps newly introduced identifiers to at most 8 per pass', () => {
+    const original = 'Text without citations.'
+    // Model introduces 9 citations
+    const repaired = 'Text [1] [1] [1] [1] [1] [1] [1] [1] [1].'
+    // Note newlyAddedIds checks unique/multiset or list:
+    // With distinct or repeated IDs:
+    const repairedMany = 'A [1]. B [2]. C [3]. D [4]. E [5]. F [6]. G [7]. H [8]. I [9].'
+    const res = verifyCitationLexicalSupport(repairedMany, original, sampleSourcePack)
+    expect(res.supported).toBe(false)
+    expect(res.addedCount).toBeGreaterThan(8)
+  })
+})
+
