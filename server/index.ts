@@ -5576,6 +5576,8 @@ app.on('POST', ['/api/chat', '/api/ask'], async (c) => {
         : 12
     const fusedPack = selectFusedEvidence(ranked, localCandidates, {
       limit: evidenceLimit,
+      webWeight: 1,
+      localWeight: 0.92,
       // When the user names one saved document and asks about several aspects,
       // four passages from that file are evidence diversity, not crowding. The
       // extra passage prevents a chunk boundary from hiding a requested aspect.
@@ -6320,7 +6322,7 @@ app.post('/api/research', async (c) => {
       const fused = selectFusedEvidence(
         rankWebResults(retrievalQuery, allWebResults, nowMs, hostPreferences),
         allLocalResults,
-        { limit: MAX_TOTAL_CONTEXT_SOURCES, maxPerFile: MAX_CHUNKS_PER_FILE }
+        { limit: MAX_TOTAL_CONTEXT_SOURCES, webWeight: 1, localWeight: 0.92, maxPerFile: MAX_CHUNKS_PER_FILE }
       )
       packWeb = fused.web
       packLocal = fused.local
@@ -6500,7 +6502,7 @@ Return STRICT JSON only: {"subQuestions":["...","...","..."]}.
       const analysisPack = selectFusedEvidence(
         rankWebResults(retrievalQuery, allWebResults, Date.now(), hostPreferences),
         allLocalResults,
-        { limit: MAX_TOTAL_CONTEXT_SOURCES, maxPerFile: MAX_CHUNKS_PER_FILE }
+        { limit: MAX_TOTAL_CONTEXT_SOURCES, webWeight: 1, localWeight: 0.92, maxPerFile: MAX_CHUNKS_PER_FILE }
       )
       const analysisWeb = analysisPack.web
       const analysisLocal = analysisPack.local

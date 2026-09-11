@@ -1267,37 +1267,28 @@ export function selectFusedEvidence<
   const perHost = new Map<string, number>()
   const perFile = new Map<string, number>()
   const selected: Array<FusedEvidence<W, L>> = []
-  const heldBack: Array<FusedEvidence<W, L>> = []
   const selectedKeys = new Set<string>()
-  const heldBackKeys = new Set<string>()
 
   const selectCandidate = (
     candidate: FusedEvidence<W, L>,
-    enforceDiversity: boolean
+    relaxation: number
   ): boolean => {
     const key = stableKey(candidate)
     if (selectedKeys.has(key) || selected.length >= limit) return false
     if (candidate.kind === 'web') {
       const host = hostOf(candidate.source.url) || candidate.source.url
       const used = perHost.get(host) ?? 0
-      if (enforceDiversity && used >= maxPerHost) {
-        if (!heldBackKeys.has(key)) {
-          heldBackKeys.add(key)
-          heldBack.push(candidate)
-        }
+      if (used >= maxPerHost * relaxation) {
         return false
       }
       perHost.set(host, used + 1)
     } else {
       const used = perFile.get(candidate.source.filePath) ?? 0
-      const duplicatesSelectedPassage = enforceDiversity && selected.some((item) =>
+      // Redundant overlapping passages are NEVER selected in any tier.
+      const duplicatesSelectedPassage = selected.some((item) =>
         item.kind === 'local' && substantiallyOverlapsLocalRange(item.source, candidate.source)
       )
-      if (enforceDiversity && (used >= maxPerFile || duplicatesSelectedPassage)) {
-        if (!heldBackKeys.has(key)) {
-          heldBackKeys.add(key)
-          heldBack.push(candidate)
-        }
+      if (duplicatesSelectedPassage || used >= maxPerFile * relaxation) {
         return false
       }
       perFile.set(candidate.source.filePath, used + 1)
@@ -1316,20 +1307,27 @@ export function selectFusedEvidence<
       let reserved = 0
       for (const candidate of kindCandidates) {
         if (reserved >= reservedPerKind || selected.length >= limit) break
-        if (selectCandidate(candidate, true)) reserved += 1
+        if (selectCandidate(candidate, 1)) reserved += 1
       }
     }
   }
 
-  for (const candidate of candidates) {
+  // Progressive widening tiers: strict cap (1x), relaxed cap (2x), and uncapped (Infinity).
+  // The local passage overlap check remains strictly enforced across all tiers.
+  let pending = candidates.filter((c) => !selectedKeys.has(stableKey(c)))
+  for (const relaxation of [1, 2, Infinity]) {
     if (selected.length >= limit) break
-    selectCandidate(candidate, true)
-  }
-
-  heldBack.sort(compareCandidates)
-  for (const candidate of heldBack) {
-    if (selected.length >= limit) break
-    selectCandidate(candidate, false)
+    const heldBack: Array<FusedEvidence<W, L>> = []
+    for (const candidate of pending) {
+      if (selected.length >= limit) {
+        heldBack.push(candidate)
+        continue
+      }
+      if (!selectCandidate(candidate, relaxation)) {
+        heldBack.push(candidate)
+      }
+    }
+    pending = heldBack
   }
 
   selected.sort(compareCandidates)

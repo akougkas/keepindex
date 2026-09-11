@@ -937,6 +937,41 @@ describe('selectFusedEvidence', () => {
 
     expect(selected.local.map((item) => item.filePath)).toEqual(['/vault/real.md'])
   })
+
+  it('weighted stream allocation does not force 9/9 50/50 alternation (KIX-06)', () => {
+    const webCandidates = Array.from({ length: 18 }, (_, index) =>
+      web(`https://web-${index + 1}.example/result`, 3.5 - index * 0.05)
+    )
+    const localCandidates = Array.from({ length: 18 }, (_, index) =>
+      local(`/vault/chunk-${index + 1}.md`, 1 - index * 0.02, 1, 0.9)
+    )
+
+    const selected = selectFusedEvidence(webCandidates, localCandidates, {
+      limit: 18,
+      webWeight: 1,
+      localWeight: 0.92,
+    })
+
+    expect(selected.web.length).toBeGreaterThan(selected.local.length)
+    expect(selected.web.length).not.toBe(9)
+  })
+
+  it('keeps passage overlap check active across widening diversity tiers (KIX-07)', () => {
+    const overlappingLocal = Array.from({ length: 10 }, (_, index) => ({
+      ...local('/vault/crowded.md', 1 - index * 0.01, 1),
+      startLine: 1 + index * 2,
+      endLine: 40,
+    }))
+    const otherLocal = local('/vault/other.md', 0.8, 1)
+
+    const selected = selectFusedEvidence([], [...overlappingLocal, otherLocal], {
+      limit: 10,
+      maxPerFile: 2,
+    })
+
+    expect(selected.local).toHaveLength(2)
+    expect(selected.local.filter((c) => c.filePath === '/vault/crowded.md')).toHaveLength(1)
+  })
 })
 
 describe('toPublicSource', () => {
