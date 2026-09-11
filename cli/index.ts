@@ -66,7 +66,7 @@ export type CliDependencies = {
   writeErr?: (text: string) => void
   fetch?: FetchLike
   commandVersion?: (command: string, args: string[]) => CommandResult
-  probeUrl?: (url: string) => Promise<boolean>
+  probeUrl?: (url: string, headers?: Record<string, string>) => Promise<boolean>
   probePort?: (port: number) => Promise<PortState>
   runCompose?: (projectRoot: string, detached: boolean) => Promise<number>
   openUrl?: (url: string, platform: NodeJS.Platform) => Promise<boolean>
@@ -384,12 +384,12 @@ function appendEndpoint(base: string, pathname: string): string {
   return `${base.replace(/\/+$/, '')}/${pathname.replace(/^\/+/, '')}`
 }
 
-async function fetchWithTimeout(fetcher: FetchLike, url: string, timeoutMs = 3500): Promise<Response> {
+async function fetchWithTimeout(fetcher: FetchLike, url: string, timeoutMs = 3500, headers?: Record<string, string>): Promise<Response> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
   try {
     return await fetcher(url, {
-      headers: { Accept: 'application/json', 'User-Agent': `KeepIndex/${KEEPINDEX_VERSION} keepidx` },
+      headers: { Accept: 'application/json', 'User-Agent': `KeepIndex/${KEEPINDEX_VERSION} keepidx`, ...headers },
       signal: controller.signal,
     })
   } finally {
@@ -408,9 +408,9 @@ function defaultCommandVersion(command: string, args: string[]): CommandResult {
   return { ok: true, detail: firstLine || 'available' }
 }
 
-async function defaultProbeUrl(fetcher: FetchLike, url: string): Promise<boolean> {
+async function defaultProbeUrl(fetcher: FetchLike, url: string, headers?: Record<string, string>): Promise<boolean> {
   try {
-    return (await fetchWithTimeout(fetcher, url, 2500)).ok
+    return (await fetchWithTimeout(fetcher, url, 2500, headers)).ok
   } catch {
     return false
   }
@@ -593,7 +593,7 @@ async function runDoctor(
   fetcher: FetchLike,
 ): Promise<{ code: number; output: string }> {
   const commandVersion = dependencies.commandVersion ?? defaultCommandVersion
-  const probeUrl = dependencies.probeUrl ?? ((url) => defaultProbeUrl(fetcher, url))
+  const probeUrl = dependencies.probeUrl ?? ((url, headers) => defaultProbeUrl(fetcher, url, headers))
   const probePort = dependencies.probePort ?? defaultProbePort
   const checks: DoctorCheck[] = []
 
@@ -669,22 +669,29 @@ async function runDoctor(
     detail: database.detail ?? (database.ok ? databasePath : 'unsafe'),
   })
 
-  const endpoints = [
-    appUrl && { label: 'KeepIndex port', base: appUrl, probes: [appendEndpoint(appUrl, '/api/health')] },
-    searxngUrl && { label: 'SearXNG port', base: searxngUrl, probes: [appendEndpoint(searxngUrl, '/healthz')] },
-    llmUrl && inferenceAdapter && {
+  const llmApiKey = env.LLM_API_KEY?.trim()
+    || env.LITELLM_API_KEY?.trim()
+    || env.KEEPINDEX_LLM_API_KEY?.trim()
+
+  type EndpointEntry = { label: string; base: string; probes: string[]; headers?: Record<string, string> }
+  const endpoints: EndpointEntry[] = []
+  if (appUrl) endpoints.push({ label: 'KeepIndex port', base: appUrl, probes: [appendEndpoint(appUrl, '/api/health')] })
+  if (searxngUrl) endpoints.push({ label: 'SearXNG port', base: searxngUrl, probes: [appendEndpoint(searxngUrl, '/healthz')] })
+  if (llmUrl && inferenceAdapter) {
+    endpoints.push({
       label: 'Local inference port',
       base: llmUrl,
+      headers: llmApiKey ? { Authorization: `Bearer ${llmApiKey}` } : undefined,
       probes: inferenceAdapter.requested === 'auto'
         ? [appendEndpoint(llmUrl, '/v1/models'), appendEndpoint(llmUrl, '/api/tags')]
         : [appendEndpoint(llmUrl, inferenceAdapter.modelsPath)],
-    },
-  ].filter((entry): entry is { label: string; base: string; probes: string[] } => Boolean(entry))
+    })
+  }
 
   const reachability = new Map<string, boolean>()
   for (const endpoint of endpoints) {
     for (const probe of endpoint.probes) {
-      const reachable = await probeUrl(probe)
+      const reachable = await probeUrl(probe, endpoint.headers)
       reachability.set(probe, reachable)
       if (reachable) break
     }

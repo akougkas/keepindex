@@ -387,17 +387,20 @@ export class LocalInferenceTransport {
   private readonly baseUrl: string
   private activeAdapter: InferenceAdapter
   private readonly automatic: boolean
+  private readonly apiKey?: string
 
   constructor(
     baseUrl: string,
     configuredAdapter: InferenceAdapter,
-    private readonly fetchImpl?: typeof fetch
+    private readonly fetchImpl?: typeof fetch,
+    apiKey?: string
   ) {
     this.baseUrl = requireLocalInferenceEndpoint(baseUrl)
     this.activeAdapter = configuredAdapter.kind === 'ollama'
       ? OLLAMA_INFERENCE_ADAPTER
       : OPENAI_COMPATIBLE_INFERENCE_ADAPTER
     this.automatic = configuredAdapter.requested === 'auto'
+    this.apiKey = apiKey?.trim() || undefined
   }
 
   get adapter(): InferenceAdapter {
@@ -412,9 +415,11 @@ export class LocalInferenceTransport {
   }
 
   private async modelsWith(adapter: InferenceAdapter, signal: AbortSignal): Promise<Response> {
+    const headers: Record<string, string> = { Accept: 'application/json' }
+    if (this.apiKey) headers.Authorization = `Bearer ${this.apiKey}`
     const response = await this.fetch(`${this.baseUrl}${adapter.modelsPath}`, {
       signal,
-      headers: { Accept: 'application/json' },
+      headers,
     })
     return adapter.kind === 'ollama' ? normalizeOllamaModelsResponse(response) : response
   }
@@ -459,10 +464,12 @@ export class LocalInferenceTransport {
     }
     if (typeof request.maxTokens === 'number') openAiPayload.max_tokens = request.maxTokens
     if (request.chatTemplateKwargs) openAiPayload.chat_template_kwargs = request.chatTemplateKwargs
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (this.apiKey) headers.Authorization = `Bearer ${this.apiKey}`
     const response = await this.fetch(`${this.baseUrl}${adapter.chatCompletionsPath}`, {
       method: 'POST',
       signal: request.signal,
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(adapter.kind === 'ollama' ? ollamaChatPayload(request) : openAiPayload),
     })
     return adapter.kind === 'ollama'

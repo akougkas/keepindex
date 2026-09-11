@@ -176,8 +176,11 @@ function boundedEnvInt(raw: string | undefined, fallback: number, minimum: numbe
 
 const SEARXNG_URL = process.env.SEARXNG_URL || 'http://127.0.0.1:8888'
 const LLM_URL = requireLocalInferenceEndpoint(process.env.LLM_URL || 'http://127.0.0.1:8080')
+const LLM_API_KEY = process.env.LLM_API_KEY?.trim()
+  || process.env.LITELLM_API_KEY?.trim()
+  || readKeepIndexEnvironment('LLM_API_KEY')
 const EMBEDDING_MODEL = readKeepIndexEnvironment('EMBEDDING_MODEL') || ''
-const INFERENCE_TRANSPORT = new LocalInferenceTransport(LLM_URL, resolveInferenceAdapter())
+const INFERENCE_TRANSPORT = new LocalInferenceTransport(LLM_URL, resolveInferenceAdapter(), undefined, LLM_API_KEY)
 const WEB_SEARCH_PROVIDER = 'searxng'
 const LOCAL_SEARCH_PROVIDER = 'local-hybrid-bm25'
 const HISTORY_SEARCH_PROVIDER = 'browser-history-fts5'
@@ -905,7 +908,18 @@ function adoptServerModels(models: ServerModelInfo[]): void {
   knownModels = models
   const advertisedIds = new Set(models.map((model) => model.id))
   if (!advertisedIds.has(activeDefaultModel)) {
-    activeDefaultModel = DEFAULT_MODEL && advertisedIds.has(DEFAULT_MODEL) ? DEFAULT_MODEL : models[0].id
+    if (DEFAULT_MODEL) {
+      if (advertisedIds.has(DEFAULT_MODEL)) {
+        activeDefaultModel = DEFAULT_MODEL
+        return
+      }
+      const matching = models.find((m) => m.id === DEFAULT_MODEL || m.id.endsWith(`/${DEFAULT_MODEL}`))
+      if (matching) {
+        activeDefaultModel = matching.id
+        return
+      }
+    }
+    activeDefaultModel = models[0].id
   }
 }
 
@@ -1073,11 +1087,13 @@ async function fetchLocalEmbeddings(inputs: string[], signal: AbortSignal): Prom
   if (!EMBEDDING_MODEL || inputs.length === 0) return []
   const timed = createTimeoutSignal(signal, 12_000)
   try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' }
+    if (LLM_API_KEY) headers.Authorization = `Bearer ${LLM_API_KEY}`
     const response = await fetch(`${LLM_URL}/v1/embeddings`, {
       method: 'POST',
       redirect: LOCAL_INFERENCE_REDIRECT_POLICY,
       signal: timed.signal,
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers,
       body: JSON.stringify({ model: EMBEDDING_MODEL, input: inputs }),
     })
     if (!response.ok) return []
@@ -4068,9 +4084,13 @@ app.get('/api/health', async (c) => {
   const checkFetch = async (url: string, redirect: RequestInit['redirect'] = 'follow') => {
     const startedAt = Date.now()
     try {
+      const headers: Record<string, string> = { Accept: 'application/json' }
+      if (LLM_API_KEY && url.startsWith(LLM_URL)) {
+        headers.Authorization = `Bearer ${LLM_API_KEY}`
+      }
       const response = await fetch(url, {
         signal: AbortSignal.timeout(2500),
-        headers: { Accept: 'application/json' },
+        headers,
         redirect,
       })
       return { ok: response.ok, latencyMs: Date.now() - startedAt, response }
@@ -4245,23 +4265,23 @@ app.post('/api/models/select', async (c) => {
   const requested = normalizeModel(body.model)
   if (typeof body.model !== 'string' || !body.model.trim()) return c.json({ error: 'model required', activeModel: activeDefaultModel }, 400)
 
-  let available = knownModels.some((model) => model.id === requested)
-  if (!available) {
+  let matching = knownModels.find((model) => model.id === requested || model.id.endsWith(`/${requested}`))
+  if (!matching) {
     try {
       const response = await INFERENCE_TRANSPORT.models(AbortSignal.timeout(4000))
       if (response.ok) {
         const models = normalizeServerModels(await response.json())
         if (models.length > 0) knownModels = models
-        available = knownModels.some((model) => model.id === requested)
+        matching = knownModels.find((model) => model.id === requested || model.id.endsWith(`/${requested}`))
       }
     } catch {
       // Keep the last-known model catalog during a temporary server outage.
     }
   }
-  if (!available) {
+  if (!matching) {
     return c.json({ error: 'model is not advertised by the local inference server', activeModel: activeDefaultModel }, 400)
   }
-  activeDefaultModel = requested
+  activeDefaultModel = matching.id
   return c.json({ success: true, activeModel: activeDefaultModel })
 })
 
