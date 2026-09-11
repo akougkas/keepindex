@@ -60,7 +60,7 @@ export function QueryVitals({
             <span>TTFT {formatDuration(metrics.timeToFirstTokenMs)}</span>
           </>
         )}
-        {quality && <span className={cn('inline-flex items-center gap-1 font-semibold', qualityTone)}><ShieldCheck className="size-3" /> {quality.score}% grounding</span>}
+        {quality && <span className={cn('inline-flex items-center gap-1 font-semibold', qualityTone)}><ShieldCheck className="size-3" /> {quality.citationCoveragePct}% citation coverage</span>}
         <span className="ml-auto text-[9px] uppercase tracking-wider group-open:text-foreground">details</span>
       </summary>
       <div className="grid gap-3 border-t border-border/45 px-3 py-3 text-[11px] text-muted-foreground sm:grid-cols-2">

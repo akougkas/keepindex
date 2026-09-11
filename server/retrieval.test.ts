@@ -5,8 +5,10 @@ import {
   dedupeWebResults,
   deriveAuthoritativeSourceSeeds,
   deriveDiscoveryQueries,
+  deriveRepositoryReleaseSeeds,
   deriveLocalRetrievalQueries,
   derivePrimaryRetrievalQuery,
+  projectReleaseSubject,
   deriveResearchSeedQueries,
   deriveRankingQueries,
   domainQuality,
@@ -657,7 +659,7 @@ describe('rankWebResults', () => {
     expect(ranked[0].url).toBe('https://directory.example.edu/people/marisol-venn')
     expect(ranked[0].queryCoverage).toBe(1)
     expect(ranked[0].queryTermCount).toBe(2)
-    expect(ranked[1].queryCoverage).toBe(0.5)
+    expect(ranked[1].queryCoverage).toBe(0)
     expect(ranked[1].queryTermCount).toBe(2)
 
     const admitted = selectFusedEvidence(ranked, [], { limit: 18 })
@@ -1018,3 +1020,44 @@ describe('toPublicSource', () => {
     expect(Object.keys(toPublicSource(ranked)).sort()).toEqual(['snippet', 'title', 'url'])
   })
 })
+
+describe('named project release retrieval', () => {
+  it('keeps the project identity when the question also asks about generic features', () => {
+    const query = 'latest on clio-coder release and features'
+    expect(deriveRankingQueries(query)).not.toContain('features')
+    expect(derivePrimaryRetrievalQuery(query)).toBe('clio-coder')
+    expect(deriveDiscoveryQueries(query).every((q) => q.includes('clio-coder'))).toBe(true)
+    const ranked = rankWebResults(query, [
+      result({ url: 'https://github.com/iowarp/clio-coder/releases', title: 'Clio Coder releases', snippet: 'Release notes', rank: 1 }),
+      result({ url: 'https://v8.dev/features', title: 'Features · V8', snippet: 'Latest features', rankingQueries: ['features'], rank: 1 }),
+      result({ url: 'https://www.clio.com/features', title: 'Clio features', snippet: 'Latest release for law firms', rank: 1 }),
+      result({ url: 'https://www.jpl.nasa.gov/news', title: 'Latest news and features', snippet: 'Space releases', rank: 1 }),
+    ], NOW)
+    const pack = selectFusedEvidence(ranked, [], { limit: 12 })
+    expect(pack.web.map((r) => r.url)).toEqual(['https://github.com/iowarp/clio-coder/releases'])
+  })
+})
+
+ it('keeps a release subject ahead of a hyphenated requested capability', () => {
+  expect(projectReleaseSubject('latest on ollama release and cross-platform features')).toBe('ollama')
+  expect(projectReleaseSubject('latest on llama.cpp release and features')).toBe('llama.cpp')
+  expect(projectReleaseSubject('latest news and features')).toBeNull()
+ })
+
+ it('does not turn private browser-history repository URLs into public hydration requests', () => {
+  const history = result({ url: 'https://github.com/private/widget-tool', title: 'Widget Tool', sourceType: 'history' })
+  expect(deriveRepositoryReleaseSeeds('latest widget-tool release', [history])).toEqual([])
+ })
+
+ it('rejects a different surname even when a search snippet appends the missing requested name', () => {
+  const ranked = rankWebResults('Who is Marina Stavrakantonaki?', [
+    result({ url: 'https://example.org/profile', title: 'Marina Stavrakantonaki', snippet: 'Survey research profile', rank: 1 }),
+    result({ url: 'https://example.org/artist', title: 'Marina Stavrakaki Art', snippet: 'Artist biography. Missing: Stavrakantonaki biography', rankingQueries: ['profile affiliation'], rank: 1 }),
+  ], NOW)
+  expect(selectFusedEvidence(ranked, [], { limit: 12 }).web.map((source) => source.url)).toEqual(['https://example.org/profile'])
+ })
+
+ it('does not substitute current-release discovery for a requested historical release', () => {
+  expect(projectReleaseSubject('clio-coder v0.3.1 release notes')).toBeNull()
+  expect(projectReleaseSubject('latest clio-coder release as of 2026-08-24')).toBeNull()
+ })

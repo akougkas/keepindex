@@ -231,7 +231,7 @@ describe('grounded answer degradation', () => {
 
     expect(llmCalls).toBe(1)
     expect(citationRepairPrompt).toBe('')
-    expect(stream.match(/"type":"answer_replace"/g)).toBeNull()
+    expect(stream).toContain('"type":"answer_replace","data":""')
     expect(record.answerText).toContain('bounded queue without citation')
     expect(record.grounding.citationCoveragePct).toBe(50)
   })
@@ -310,7 +310,7 @@ describe('grounded answer degradation', () => {
 
     expect(llmCalls).toBe(1)
     expect(repairCalls).toBe(0)
-    expect(stream.match(/"type":"answer_replace"/g)).toBeNull()
+    expect(stream).toContain('"type":"answer_replace","data":""')
     expect(record.answerText).not.toBe(firstPass)
     expect(record.answerText).not.toBe(secondPass)
     expect(record.grounding.citationCoveragePct).toBeLessThan(80)
@@ -400,7 +400,7 @@ describe('grounded answer degradation', () => {
 
     expect(llmCalls).toBe(1)
     expect(repairSystemPrompts).toHaveLength(0)
-    expect(stream.match(/"type":"answer_replace"/g)).toBeNull()
+    expect(stream).toContain('"type":"answer_replace","data":""')
     expect(record.answerText).toBe(draft)
     expect(record.answerText).not.toBe(cleanup)
     expect(record.grounding.citationCoveragePct).toBeLessThan(80)
@@ -722,7 +722,43 @@ describe('grounded answer degradation', () => {
     })
     expect(takeawaysRes.status).toBe(200)
     const takeawaysBody = await takeawaysRes.json() as { status: string; takeaways: string[] }
-    expect(takeawaysBody.status).toBe('unavailable')
+    expect(takeawaysBody.status).toBe('skipped')
     expect(takeawaysBody.takeaways).toEqual([])
+  })
+})
+
+describe('useful evidence when the selected model fails', () => {
+  it('replaces an invented release with clearly labelled, exact local source excerpts', async () => {
+    __test__.setKnowledgeIndex([{
+      id: 'widget-release', filePath: '/home/user/projects/widget-tool/CHANGELOG.md', fileName: 'CHANGELOG.md',
+      content: '# Widget Tool Changelog\n\n## 2.8.1 - 2026-09-11\n\nWidget Tool adds a reusable workflow library and safer keyboard handling in this release.\n',
+      startLine: 1, endLine: 5,
+    }])
+    let calls = 0
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/chat/completions')) {
+        calls++
+        return new Response('data: {"choices":[{"delta":{"content":"Widget Tool version 9.9.9 introduces an invented cloud architecture [L1]."}}]}\n\ndata: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } })
+      }
+      throw new Error(`Unexpected external request for local evidence: ${url}`)
+    }) as typeof fetch
+    const response = await app.request('/api/ask/stream', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: 'latest widget-tool release and features', target: 'files' }) })
+    const events = (await response.text()).split('\n').filter((line) => line.startsWith('data: ')).map((line) => JSON.parse(line.slice(6)))
+    const replacement = events.find((event) => event.type === 'answer_replace')
+    expect(replacement?.data).toContain('2.8.1')
+    expect(replacement?.data).toContain('Widget Tool adds a reusable workflow library and safer keyboard handling in this release.')
+    expect(replacement?.data).not.toContain('9.9.9')
+    expect(events.find((event) => event.type === 'quality')?.data.answerMode).toBe('extractive')
+    expect(events.at(-1)?.data.grounded).toBe(true)
+    expect(calls).toBe(1)
+  })
+
+  it('extracts takeaways without another model call or invented prose', async () => {
+    globalThis.fetch = (async () => { throw new Error('takeaways must not call AI') }) as typeof fetch
+    const first = 'Readers retain a consistent snapshot while the writer appends frames to the log [1].'
+    const answer = `${first}\n\n${'Background explanation without a citation. '.repeat(35)}`
+    const response = await app.request('/api/takeaways', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answer }) })
+    expect((await response.json()).takeaways).toEqual([first])
   })
 })

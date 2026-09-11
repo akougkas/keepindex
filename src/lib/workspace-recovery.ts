@@ -197,6 +197,7 @@ function normalizeQuality(value: unknown): GroundingAssessment | null {
   const sourceCount = finiteNumber(quality.sourceCount)
   if (score == null || citationCoveragePct == null || citedSourceCount == null || sourceCount == null) return null
   return {
+    ...(quality.answerMode === 'extractive' ? { answerMode: 'extractive' as const } : {}),
     status: quality.status as GroundingAssessment['status'],
     score,
     citationCoveragePct,

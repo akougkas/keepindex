@@ -50,7 +50,7 @@ function responseReportingUrl(response: Response, url: string): Response {
 }
 
 describe('public source hydration allowlist', () => {
-  it('allows only the exact HTTPS authority and path pairs needed by the corpus', () => {
+  it('allows supported HTTPS document formats and public GitHub release paths', () => {
     const allowed = [
       'https://science.nasa.gov/earth/facts/',
       'https://spaceplace.nasa.gov/seasons/en/',
@@ -81,7 +81,7 @@ describe('public source hydration allowlist', () => {
       'https://science.nasa.gov/earth/other/',
       'https://www.rfc-editor.org.evil.example/rfc/rfc6585',
       'https://www.rfc-editor.org/rfc/rfc9999',
-      'https://github.com/another/repository/releases/tag/bun-v1.4.0',
+      'https://github.com/another/repository/issues/1',
       'https://169.254.169.254/latest/meta-data/',
       'https://127.0.0.1/',
       'file:///etc/passwd',
@@ -527,5 +527,37 @@ Unrelated next section.
 
     expect(result.snippet).toBe(input.snippet)
     expect(result.hydration).toMatchObject({ status: 'failed', reason: 'invalid-content' })
+  })
+})
+
+describe('current public repository releases', () => {
+  it('reads the current release for any exact repository, replacing stale snippets', async () => {
+    const mock = mockedFetch((url) => {
+      expect(url).toBe('https://api.github.com/repos/example/widget-tool/releases/latest')
+      return new Response(JSON.stringify({
+        tag_name: 'v2.8.1', name: 'Widget Tool 2.8.1', published_at: '2026-09-11T01:00:00Z',
+        draft: false, prerelease: false, html_url: 'https://github.com/example/widget-tool/releases/tag/v2.8.1',
+        body: 'Unified workflow library and safer keyboard handling.',
+      }), { headers: { 'Content-Type': 'application/json' } })
+    })
+    const [result] = await new PublicSourceHydrator({ fetchImpl: mock.fetchImpl }).hydrate([
+      source('https://github.com/example/widget-tool/releases', 'Latest release 0.1.0, obsolete architecture.')
+    ], 'latest widget-tool release and features')
+    expect(result.hydration.status).toBe('hydrated')
+    expect(result.snippet).toContain('v2.8.1')
+    expect(result.snippet).toContain('2026-09-11')
+    expect(result.snippet).not.toContain('0.1.0')
+  })
+
+  it('rejects repository substitution in release responses and redirects', async () => {
+    for (const response of [
+      new Response(null, { status: 302, headers: { Location: 'https://api.github.com/repos/attacker/widget-tool/releases/latest' } }),
+      new Response(JSON.stringify({ tag_name: 'v1.0', draft: false, prerelease: false, html_url: 'https://github.com/attacker/widget-tool/releases/tag/v1.0' }), { headers: { 'Content-Type': 'application/json' } }),
+    ]) {
+      const mock = mockedFetch(() => response)
+      const [result] = await new PublicSourceHydrator({ fetchImpl: mock.fetchImpl }).hydrate([source('https://github.com/example/widget-tool/releases')], 'widget-tool release')
+      expect(mock.calls).toHaveLength(1)
+      expect(result.hydration.status).toBe('failed')
+    }
   })
 })

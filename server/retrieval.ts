@@ -144,6 +144,56 @@ function repositoryHandles(input: string): string[] {
     .map((match) => match[0])
 }
 
+/** A named software release subject, never generic aspects such as "features". */
+export function projectReleaseSubject(input: string): string | null {
+  // Version-specific and historical questions need their requested record,
+  // not the current-release shortcut. Keep the ordinary retrieval path.
+  if (/\bv?\d+(?:\.\d+)+\b|\bas[ -]of\s+20\d{2}-\d{2}-\d{2}\b/i.test(input)) return null
+  if (!/\b(?:releases?|features?|changelog|version|updates?)\b/i.test(input)) return null
+  if (/\b(?:compare|versus|vs)\b/i.test(input)) return null
+  const handle = repositoryHandles(input)[0]
+  if (handle) return handle.replace(/^@/, '').split('/')[1]
+  const match = /\b(?:latest|current|newest)\s+(?:(?:on|about|stable|release|version|of|for)\s+)*([a-z][a-z0-9_.+-]*(?:\s+[a-z][a-z0-9_.+-]*){0,2}?)\s+(?:releases?|features?|version|updates?)\b/i.exec(input)
+    ?? /^([a-z][a-z0-9_.+-]*)\s+(?:latest|current|release|features|changelog|version)\b/i.exec(input)
+  const compound = /\b[a-z][a-z0-9]*(?:-[a-z0-9]+)+\b/i.exec(input)?.[0]
+  const subject = (match?.[1] ?? (compound && !/^(?:up-to-date|as-of|first-party)$/i.test(compound) ? compound : undefined))?.toLowerCase()
+  return subject && tokenizeQuery(subject).length > 0 && !/^(?:the|news|software|product|project|release|features|updates|my|this|our)(?:\s|$)/.test(subject) ? subject : null
+
+}
+
+export function personLookupSubject(input: string): string | null {
+  return /^(?:who|ho|whom)\s+is\s+([\p{L}][\p{L}.'’\-]*(?:\s+[\p{L}][\p{L}.'’\-]*){1,3})\s*[?!.]*$/iu.exec(input.trim())?.[1]?.trim() ?? null
+}
+
+export function matchesProjectSubject(subject: string, text: string): boolean {
+  const identity = tokenizeQuery(subject).join(' ')
+  return (` ${tokenizeQuery(text).join(' ')} `).includes(` ${identity} `)
+}
+
+/** Discover the release endpoint from an exact public repository identity. */
+export function deriveRepositoryReleaseSeeds(query: string, results: RankedSearchResult[]): RankedSearchResult[] {
+  const subject = projectReleaseSubject(query)
+  if (!subject) return []
+  const repositories = new Set<string>()
+  const explicit = repositoryHandles(query)[0]?.replace(/^@/, '')
+  if (explicit) repositories.add(explicit)
+  for (const result of results) {
+    if (result.sourceType === 'history' || result.engines?.includes('browser-history-fts5')) continue
+    try {
+      const url = new URL(result.url)
+      if (url.hostname !== 'github.com' || url.username || url.password) continue
+      const match = /^\/([a-z0-9_.-]+)\/([a-z0-9_.-]+)(?:\/|$)/i.exec(url.pathname)
+      if (match && tokenizeQuery(match[2]).join(' ') === tokenizeQuery(subject).join(' ')) repositories.add(`${match[1]}/${match[2]}`)
+    } catch { /* malformed search result */ }
+  }
+  return [...repositories].slice(0, 2).map((repository) => ({
+    title: `Latest release · ${repository}`,
+    url: `https://github.com/${repository}/releases`,
+    snippet: `Release ledger for ${repository}. Current release details require a successful live fetch.`,
+    rank: 1, engines: ['authoritative-direct'], rankingQueries: [subject],
+  }))
+}
+
 /**
  * Produces bounded alternate queries used only for relevance scoring. This is
  * deliberately deterministic and additive: SearXNG still receives the full
@@ -156,10 +206,12 @@ export function deriveRankingQueries(input: string, limit = 16): string[] {
   if (!original) return []
   const boundedLimit = Math.max(1, Math.min(32, Math.trunc(limit)))
   const variants: string[] = []
+  const projectSubject = projectReleaseSubject(original)
   const seen = new Set<string>()
   const add = (candidate: string, allowLong = false): void => {
     if (variants.length >= boundedLimit) return
     const normalized = normalizeQueryWhitespace(candidate)
+    if (projectSubject && !matchesProjectSubject(projectSubject, normalized)) return
     if (!normalized || (!allowLong && normalized.length > 240)) return
     const terms = new Set(tokenizeQuery(normalized))
     if (terms.size === 0 || (!allowLong && terms.size > 14)) return
@@ -170,6 +222,7 @@ export function deriveRankingQueries(input: string, limit = 16): string[] {
   }
 
   add(original, true)
+  if (projectSubject) add(projectSubject)
 
   // A first question clause often contains the subject while later sentences
   // contain citation and formatting instructions ("Who is X? Give ...").
@@ -211,7 +264,9 @@ export function deriveRankingQueries(input: string, limit = 16): string[] {
   // lets each of several similarly named projects admit its own primary page.
   for (const [index, clause] of clauses.slice(0, 3).entries()) {
     if (isControlClause(clause, index)) continue
-    for (const segment of clause.split(/,|\band\b/gi)) add(segment)
+    for (const segment of clause.split(/,|\band\b/gi)) {
+      if (tokenizeQuery(segment).some((term) => !RETRIEVAL_CONTROL_TERMS.has(term) && !['latest', 'release', 'releases', 'features', 'updates', 'news'].includes(term))) add(segment)
+    }
   }
 
   const compactTerms = tokenizeQuery(original)
@@ -239,6 +294,9 @@ export function deriveRankingQueries(input: string, limit = 16): string[] {
 export function derivePrimaryRetrievalQuery(input: string): string {
   const original = normalizeQueryWhitespace(input)
   if (!original) return ''
+
+  const projectSubject = projectReleaseSubject(original)
+  if (projectSubject) return projectSubject
 
   const quotedTitle = /["“”]([^"“”]{3,160})["“”]/.exec(original)?.[1]
   if (quotedTitle) {
@@ -348,6 +406,8 @@ export function deriveDiscoveryQueries(
   const selected: string[] = []
   const seen = new Set<string>()
   const priorityVariants: string[] = []
+  const projectSubject = projectReleaseSubject(original)
+  if (projectSubject) priorityVariants.push(`"${projectSubject}" releases`, `"${projectSubject}" features`)
 
   // Normative HTTP questions need the specifications themselves, not only
   // secondary pages that happen to mention the status code. The RFC suffix is
@@ -986,6 +1046,11 @@ export function rankWebResults(
       }
     }
 
+    const subject = projectReleaseSubject(query) ?? personLookupSubject(query)
+    if (subject && !matchesProjectSubject(subject, `${result.title} ${result.url} ${result.snippet}`)) {
+      bestCoverage = 0
+      bestScore = 0
+    }
     result.queryCoverage = bestCoverage
     result.queryTermCount = Number.isFinite(bestTermCount) ? bestTermCount : 0
     result.relevanceScore = Number(bestScore.toFixed(6))

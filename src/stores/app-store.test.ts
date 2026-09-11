@@ -570,3 +570,28 @@ describe('app-store workspace reset', () => {
     expect(state.chatThinking).toEqual({ 'assistant-1': 'kept chat trace' })
   })
 })
+
+describe('rejected synthesis', () => {
+  it('discards the draft and never derives or saves content when the server rejects grounding', async () => {
+    const calls: string[] = []
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.pathname : input.url
+      calls.push(url)
+      if (url === '/api/ask') return createSseResponse([
+        { type: 'sources', data: { web: [{ title: 'Official release', url: 'https://example.org/releases', snippet: 'Release notes' }], local: [] } },
+        { type: 'delta', data: 'Invented project architecture with no supporting source.' },
+        { type: 'done', data: { grounded: false } },
+      ])
+      throw new Error(`Rejected answers must not trigger ${url}`)
+    }) as typeof fetch
+    await useAppStore.getState().streamAnswer('latest widget-tool release and features')
+    expect(useAppStore.getState().answer).toBe('')
+    expect(useAppStore.getState().error).toContain('unverified draft was discarded')
+    expect(useAppStore.getState().sources).toHaveLength(1)
+    expect(useAppStore.getState().takeaways).toEqual([])
+    expect(useAppStore.getState().relatedQuestions).toEqual([])
+    expect(calls).toEqual(['/api/ask'])
+    expect(useSessionStore.getState().lastAnswer).toBe('')
+    expect(useJourneyStore.getState().nodes).toEqual([])
+  })
+})

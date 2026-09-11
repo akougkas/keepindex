@@ -77,6 +77,7 @@ export type QueryMetrics = {
 }
 
 export type GroundingAssessment = {
+  answerMode?: 'synthesis' | 'extractive'
   status: 'strong' | 'mixed' | 'weak' | 'ungrounded'
   score: number
   citationCoveragePct: number
@@ -112,7 +113,7 @@ type AnswerStreamEvent =
   | RequestEvent<'answer_replace', string>
   | RequestEvent<'quality', GroundingAssessment>
   | RequestEvent<'metrics', QueryMetrics>
-  | RequestEvent<'done'>
+  | RequestEvent<'done', { grounded?: boolean; model?: string }>
 
 type ChatStreamEvent =
   | RequestEvent<'error', string>
@@ -487,7 +488,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
           if (!isCurrentGeneration('answer', generation)) return false
           if (payload.type === 'error') {
             receivedTerminalError = true
-            set({ isLoading: false, isThinking: false, relatedQuestionsLoading: false, ...setError(payload.data ?? 'Something went wrong.') })
+            set({ answer: '', isLoading: false, isThinking: false, relatedQuestionsLoading: false, ...setError(payload.data ?? 'Something went wrong.') })
             return false
           }
           if (payload.type === 'progress') {
@@ -509,6 +510,14 @@ export const useAppStore = create<AppState>()((set, get) => ({
             set({ answerMetrics: payload.data ?? null })
           } else if (payload.type === 'done') {
             receivedDone = true
+            if (payload.data?.grounded === false) {
+              receivedTerminalError = true
+              set({ answer: '', thinking: '', isLoading: false, isThinking: false,
+                relatedQuestions: [], takeaways: [], relatedQuestionsLoading: false,
+                ...setError('KeepIndex could not support this answer with the retrieved evidence. The unverified draft was discarded. Review the sources or narrow your question.'),
+              })
+              return false
+            }
             set({ isLoading: false, isThinking: false })
             const q = get().query
             const a = get().answer
@@ -1189,7 +1198,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
           if (!isCurrentGeneration('research', generation)) return false
           if (payload.type === 'error') {
             receivedTerminalError = true
-            set({ isResearching: false, isThinking: false, ...setError(payload.data ?? 'Something went wrong.') })
+            set({ researchReport: '', researchThinking: '', takeaways: [], isResearching: false, isThinking: false, ...setError(payload.data ?? 'Something went wrong.') })
             return false
           }
           const ts = Date.now()
@@ -1237,6 +1246,12 @@ export const useAppStore = create<AppState>()((set, get) => ({
               set({ researchMetrics: payload.data ?? null })
               break
             case 'done':
+              if (payload.data && typeof payload.data === 'object' && 'grounded' in payload.data && payload.data.grounded === false) {
+                receivedTerminalError = true
+                set({ researchReport: '', researchThinking: '', takeaways: [], isResearching: false, isThinking: false,
+                  ...setError('KeepIndex withheld this report because its evidence could not be validated.') })
+                return false
+              }
               receivedDone = true
               set((s) => ({
                 isResearching: false,

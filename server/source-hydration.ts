@@ -8,7 +8,7 @@ import {
  * A deliberately small public-web reader for high-value source snippets.
  *
  * This is not a general URL fetcher. It accepts only the exact authoritative
- * host/path pairs used by KeepIndex's correctness corpus, never sends cookies or
+ * host/path pairs for supported public document formats, never sends cookies or
  * credentials, follows redirects manually, and keeps every redirect inside the
  * originating source policy. Search-result URLs remain the display URLs; a
  * policy may use a smaller evidence endpoint internally (notably GitHub's
@@ -80,6 +80,7 @@ type SourcePolicyId =
   | 'earth-seasons'
   | 'bun-release-post'
   | 'bun-github-release'
+  | 'github-release'
   | 'http-rfc'
   | 'chroma-chunking'
   | 'arxiv-retrieval'
@@ -110,6 +111,7 @@ type BoundedBody = {
 }
 
 type HydratedDocument = {
+  fetchedAt: number
   text: string
   bytesRead: number
   truncated: boolean
@@ -132,6 +134,7 @@ const POLICIES = {
   earthFacts: { id: 'earth-facts', responseKind: 'html' },
   earthSeasons: { id: 'earth-seasons', responseKind: 'html' },
   bunPost: { id: 'bun-release-post', responseKind: 'html' },
+  github: { id: 'github-release', responseKind: 'github-release-json' },
   bunGithub: { id: 'bun-github-release', responseKind: 'github-release-json' },
   httpRfc: { id: 'http-rfc', responseKind: 'plain-text' },
   chroma: { id: 'chroma-chunking', responseKind: 'html' },
@@ -200,6 +203,23 @@ const SOURCE_ROUTES: readonly SourceRoute[] = [
     policy: POLICIES.bunGithub,
     host: 'api.github.com',
     path: /^\/repos\/oven-sh\/bun\/releases\/tags\/(bun-v\d+\.\d+\.\d+)\/?$/,
+  },
+  {
+    policy: POLICIES.github,
+    host: 'github.com',
+    path: /^\/([a-z0-9_.-]+)\/([a-z0-9_.-]+)\/releases(?:\/latest)?\/?$/i,
+    toFetchUrl: (_url, match) => exactUrl(`https://api.github.com/repos/${match[1]}/${match[2]}/releases/latest`),
+  },
+  {
+    policy: POLICIES.github,
+    host: 'github.com',
+    path: /^\/([a-z0-9_.-]+)\/([a-z0-9_.-]+)\/releases\/tag\/([a-z0-9_.+-]+)\/?$/i,
+    toFetchUrl: (_url, match) => exactUrl(`https://api.github.com/repos/${match[1]}/${match[2]}/releases/tags/${match[3]}`),
+  },
+  {
+    policy: POLICIES.github,
+    host: 'api.github.com',
+    path: /^\/repos\/[a-z0-9_.-]+\/[a-z0-9_.-]+\/releases\/(?:latest|tags\/[a-z0-9_.+-]+)\/?$/i,
   },
   {
     policy: POLICIES.httpRfc,
@@ -575,7 +595,7 @@ function htmlToEvidenceText(html: string): string {
   return compactText([...uniqueMetadata, visible].join('\n'))
 }
 
-function githubReleaseToEvidenceText(raw: string, expectedTag?: string): string {
+function githubReleaseToEvidenceText(raw: string, expectedTag?: string, expectedRepository?: string): string {
   let payload: Record<string, unknown>
   try {
     const parsed = JSON.parse(raw) as unknown
@@ -597,16 +617,21 @@ function githubReleaseToEvidenceText(raw: string, expectedTag?: string): string 
     throw new HydrationError('invalid-content')
   }
 
-  if (typeof payload.tag_name !== 'string' || !/^bun-v\d+\.\d+\.\d+$/.test(payload.tag_name)) {
+  if (typeof payload.tag_name !== 'string' || !/^[a-z0-9_.+-]{1,128}$/i.test(payload.tag_name)) {
     throw new HydrationError('invalid-content')
   }
   if (expectedTag && payload.tag_name !== expectedTag) throw new HydrationError('invalid-content')
   const htmlUrl = typeof payload.html_url === 'string' ? payload.html_url : ''
   if (htmlUrl) {
-    const approved = resolveApprovedTarget(htmlUrl, POLICIES.bunGithub.id)
+    const approved = resolveApprovedTarget(htmlUrl)
     if (!approved || normalizedHost(new URL(htmlUrl).hostname) !== 'github.com') {
       throw new HydrationError('invalid-content')
     }
+  }
+
+  if (expectedRepository) {
+    const expectedUrl = `https://github.com/${expectedRepository}/releases/tag/${payload.tag_name}`
+    if (htmlUrl.toLowerCase() !== expectedUrl.toLowerCase() || payload.draft !== false || payload.prerelease !== false) throw new HydrationError('invalid-content')
   }
 
   const fields: Array<[string, unknown]> = [
@@ -630,8 +655,8 @@ function githubReleaseToEvidenceText(raw: string, expectedTag?: string): string 
   return compactText(metadata)
 }
 
-function documentText(raw: string, kind: ResponseKind, expectedTag?: string): string {
-  if (kind === 'github-release-json') return githubReleaseToEvidenceText(raw, expectedTag)
+function documentText(raw: string, kind: ResponseKind, expectedTag?: string, expectedRepository?: string): string {
+  if (kind === 'github-release-json') return githubReleaseToEvidenceText(raw, expectedTag, expectedRepository)
   const text = kind === 'html' ? htmlToEvidenceText(raw) : compactText(raw)
   if (!text) throw new HydrationError('invalid-content')
   return text
@@ -1001,13 +1026,17 @@ export class PublicSourceHydrator {
 
     try {
       const loaded = await this.loadDocument(target, signal)
-      const evidence = evidenceExcerpt(
+      const evidence = target.policy.id === 'github-release'
+        ? truncateAtWord(loaded.document.text, this.maxSnippetChars - 100)
+        : evidenceExcerpt(
         loaded.document.text,
         query,
         Math.max(160, this.maxSnippetChars - 240),
         target.policy.id
       )
-      const snippet = expandedSnippet(source.snippet, evidence, this.maxSnippetChars)
+      const snippet = target.policy.id === 'github-release'
+        ? `Live GitHub release record (checked ${new Date(loaded.document.fetchedAt).toISOString()}${loaded.cacheHit ? '; cached for at most 10 minutes' : ''}):\n${evidence}`
+        : expandedSnippet(source.snippet, evidence, this.maxSnippetChars)
       return this.withMetadata(source, {
         status: 'hydrated',
         reason: null,
@@ -1091,7 +1120,7 @@ export class PublicSourceHydrator {
         // Validate its reported final URL before consuming a single byte.
         const reportedUrl = response.url || current.href
         const reported = resolveApprovedTarget(reportedUrl, target.policy.id)
-        if (!reported) {
+        if (!reported || (target.policy.id === 'github-release' && reported.fetchUrl.href !== target.fetchUrl.href)) {
           await discardResponseBody(response)
           throw new HydrationError('redirect-rejected', response.status)
         }
@@ -1110,7 +1139,7 @@ export class PublicSourceHydrator {
             throw new HydrationError('redirect-rejected', response.status)
           }
           const next = resolveApprovedTarget(redirectUrl, target.policy.id)
-          if (!next) throw new HydrationError('redirect-rejected', response.status)
+          if (!next || (target.policy.id === 'github-release' && next.fetchUrl.href !== target.fetchUrl.href)) throw new HydrationError('redirect-rejected', response.status)
           current = next.fetchUrl
           redirects += 1
           continue
@@ -1126,12 +1155,14 @@ export class PublicSourceHydrator {
           throw new HydrationError('unsupported-content-type', response.status)
         }
         const body = await readBoundedBody(response, this.maxBytes, controller.signal)
-        const expectedGithubTag = /\/releases\/tags\/(bun-v\d+\.\d+\.\d+)\/?$/.exec(
+        const expectedGithubTag = /\/releases\/tags\/([a-z0-9_.+-]+)\/?$/i.exec(
           target.fetchUrl.pathname
         )?.[1]
-        const text = documentText(body.raw, target.policy.responseKind, expectedGithubTag)
+        const expectedRepository = target.policy.id === 'github-release' ? /^\/repos\/([^/]+\/[^/]+)\//.exec(target.fetchUrl.pathname)?.[1] : undefined
+        const text = documentText(body.raw, target.policy.responseKind, expectedGithubTag, expectedRepository)
         const finalHost = normalizedHost(new URL(reportedUrl).hostname)
         const document: HydratedDocument = {
+          fetchedAt: this.now(),
           text,
           bytesRead: body.bytesRead,
           truncated: body.truncated,

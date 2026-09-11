@@ -29,6 +29,7 @@ function AnswerMetadataBar() {
   const answerStartTime = useAppStore((s) => s.answerStartTime)
   const answerMetrics = useAppStore((s) => s.answerMetrics)
   const answerQuality = useAppStore((s) => s.answerQuality)
+  const error = useAppStore((s) => s.error)
 
   const scrollToSources = () => {
     const panel = document.querySelector('[data-panel="sources"]')
@@ -38,7 +39,7 @@ function AnswerMetadataBar() {
     }
   }
 
-  let status: 'thinking' | 'writing' | 'done' = 'done'
+  let status: 'thinking' | 'writing' | 'done' | 'rejected' | 'unverified' = error ? 'rejected' : answerQuality ? 'done' : 'unverified'
   if (isLoading) {
     status = sources.length > 0 || localSources.length > 0 ? 'writing' : 'thinking'
   }
@@ -52,7 +53,7 @@ function AnswerMetadataBar() {
       <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
       <span className="flex items-center gap-1.5">
         <span className="size-1.5 rounded-full bg-green-500" />
-        Powered by local LLM
+        {answerQuality?.answerMode === 'extractive' ? 'Quoted from sources' : 'Powered by your selected AI'}
       </span>
       <button
         type="button"
@@ -76,9 +77,11 @@ function AnswerMetadataBar() {
         {status === 'writing' && (
           <>
             <Pencil className="size-3" />
-            Writing...
+            Drafting · checking citations…
           </>
         )}
+        {status === 'unverified' && <span>Citations not checked</span>}
+        {status === 'rejected' && <span className="text-destructive">Answer withheld</span>}
         {status === 'done' && (
           <>
             <Check className="size-3" />
@@ -151,9 +154,9 @@ function AnswerHeaderActions() {
   }
 
   const saved = isCurrentSaved()
-  const canSave = !!query && !!answer
-  const canCopy = !!answer
-  const canDiscuss = !!answer && mode === 'ai'
+  const canSave = !!query && !!answer && !isLoading
+  const canCopy = !!answer && !isLoading
+  const canDiscuss = !!answer && mode === 'ai' && !isLoading
   const canPin = mode === 'ai' && !!answer && !isLoading
   const isPinned = pinnedResult != null && pinnedResult.mode === 'ai' && pinnedResult.query === query && pinnedResult.answer === answer
 

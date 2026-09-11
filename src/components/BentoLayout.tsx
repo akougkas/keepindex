@@ -33,6 +33,8 @@ import { cn } from '@/lib/utils'
 export function BentoLayout() {
   const mode = useAppStore((state) => state.mode)
   const query = useAppStore((state) => state.query)
+  const answerQuality = useAppStore((state) => state.answerQuality)
+  const error = useAppStore((state) => state.error)
   const sources = useAppStore((state) => state.sources)
   const localSources = useAppStore((state) => state.localSources)
   const researchSources = useAppStore((state) => state.researchSources)
@@ -50,7 +52,7 @@ export function BentoLayout() {
       : sources.length + localSources.length
   const mathResult = tryEvaluateMathExpression(query)
   const modeMeta = {
-    ai: { label: 'Grounded answer', icon: Sparkles, detail: `${sourceCount} cited sources` },
+    ai: { label: error ? 'Answer withheld' : answerQuality?.answerMode === 'extractive' ? 'Source excerpts' : 'AI answer', icon: Sparkles, detail: answerQuality ? `${answerQuality.citedSourceCount} of ${sourceCount} sources cited` : `${sourceCount} sources retrieved` },
     research: { label: 'Deep research', icon: Compass, detail: `${sourceCount} sources mapped` },
     search: { label: 'Direct results', icon: Search, detail: `${sourceCount} results fused` },
     chat: { label: 'Follow-up thread', icon: MessageCircle, detail: 'Local conversation' },
@@ -112,6 +114,7 @@ export function BentoLayout() {
 }
 
 function AnswerStream() {
+  const answerMode = useAppStore((state) => state.answerQuality?.answerMode)
   const relatedQuestions = useAppStore((state) => state.relatedQuestions)
   const relatedQuestionsLoading = useAppStore((state) => state.relatedQuestionsLoading)
   const hasRelated = relatedQuestions.length > 0 || relatedQuestionsLoading
@@ -119,7 +122,7 @@ function AnswerStream() {
   return (
     <div className="workspace-grid">
       <main className="min-w-0">
-        <SectionHeading label="Synthesized answer" actions={<AnswerHeaderActions />} />
+        <SectionHeading label={answerMode === 'extractive' ? 'Source excerpts' : 'Synthesized answer'} actions={<AnswerHeaderActions />} />
         <div className="mb-6"><AnswerMetadataBar /></div>
         <AnswerPanel />
         {hasRelated && (
