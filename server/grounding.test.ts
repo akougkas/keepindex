@@ -18,6 +18,8 @@ const {
   cleanKnowledgeText,
   chunkText,
   MAX_CHUNKS_PER_FILE,
+  extractSourceExcerptsFromPack,
+  verifyCitationLexicalSupport,
 } = __test__
 
 describe('compact-model failure cases', () => {
@@ -104,6 +106,15 @@ describe('grouped citations', () => {
     expect(extractCitationIds('Mixed evidence supports this [1; L2].')).toEqual(['1', 'L2'])
     expect(extractCitationIds('Single form still works [7].')).toEqual(['7'])
     expect(extractCitationIds('No citations at all here.')).toEqual([])
+  })
+
+  it('propagates the leading namespace across grouped local citations (KIX-22)', () => {
+    expect(extractCitationIds('Local evidence supports this [L1, 2, 3].')).toEqual(['L1', 'L2', 'L3'])
+    expect(extractCitationIds('Mixed sources [L1, L2; 3, 4].')).toEqual(['L1', 'L2', '3', '4'])
+    const quality = assessGrounding('Local notes document this behavior [L1, 2].', 0, 3)
+    expect(quality.citedSourceCount).toBe(2)
+    expect(quality.invalidCitations).toEqual([])
+    expect(quality.status).toBe('strong')
   })
 
   it('credits a claim cited only in grouped form', () => {
@@ -411,6 +422,16 @@ describe('Markdown blockquote citation scope', () => {
     const quality = assessGrounding(answer, 1, 0)
     expect(quality.citationCoveragePct).toBe(0)
     expect(quality.invalidCitations).toEqual(['9'])
+  })
+
+  it('credits local document and note attributions immediately introducing a cited quote (KIX-22)', () => {
+    const answer = [
+      'According to the local runbook note, the backup procedure is configured as follows:',
+      '',
+      '> Take an immediate snapshot of the primary database before rotating keys [L1].',
+    ].join('\n')
+
+    expect(assessGrounding(answer, 0, 1).citationCoveragePct).toBe(100)
   })
 })
 
@@ -1040,5 +1061,93 @@ describe('search engine health', () => {
     expect(getEngineHealth().down).toEqual([])
     recordEngineHealth([null, 42, 'plain-name'], [])
     expect(getEngineHealth().down).toEqual([{ engine: 'plain-name', reason: 'unavailable' }])
+  })
+})
+
+describe('citation lexical support gating (KIX-02)', () => {
+  const sampleSourcePack = `Web Sources:
+[1] SQLite WAL Documentation — The write-ahead log (WAL) provides concurrency improvements over rollback journal. (https://sqlite.org/wal.html)
+
+[2] HTTP Semantics RFC 9110 — The 503 Service Unavailable status code indicates that the server is currently unable to handle the request. (https://rfc-editor.org/rfc/rfc9110)
+
+Local Knowledge:
+[L1] indexing.ts @ src/indexing.ts — In-memory BM25 index calculates IDF statistics over chunked documents.`
+
+  it('extracts source excerpts from prompt source pack', () => {
+    const excerpts = extractSourceExcerptsFromPack(sampleSourcePack)
+    expect(excerpts.has('1')).toBe(true)
+    expect(excerpts.get('1')).toContain('write-ahead log')
+    expect(excerpts.has('2')).toBe(true)
+    expect(excerpts.get('2')).toContain('Service Unavailable')
+    expect(excerpts.has('L1')).toBe(true)
+    expect(excerpts.get('L1')).toContain('BM25 index')
+  })
+
+  it('permits repair when no new citations are introduced', () => {
+    const original = 'SQLite uses a write-ahead log [1].'
+    const repaired = original
+    const res = verifyCitationLexicalSupport(repaired, original, sampleSourcePack)
+    expect(res.supported).toBe(true)
+    expect(res.addedCount).toBe(0)
+  })
+
+  it('rejects repeating an existing citation on an unrelated claim', () => {
+    const original = 'SQLite uses a write-ahead log [1]. Penguins migrate annually.'
+    const repaired = 'SQLite uses a write-ahead log [1]. Penguins migrate annually [1].'
+    expect(verifyCitationLexicalSupport(repaired, original, sampleSourcePack))
+      .toEqual({ supported: false, addedCount: 1 })
+  })
+
+  it('checks a citation moved onto a different claim even when its count is unchanged', () => {
+    const original = 'SQLite uses a write-ahead log [1]. Penguins migrate annually.'
+    const repaired = 'SQLite uses a write-ahead log. Penguins migrate annually [1].'
+    expect(verifyCitationLexicalSupport(repaired, original, sampleSourcePack))
+      .toEqual({ supported: false, addedCount: 1 })
+  })
+
+  it('accepts and counts a repeated citation when its new claim is supported', () => {
+    const original = 'SQLite uses a write-ahead log [1]. WAL improves concurrency.'
+    const repaired = 'SQLite uses a write-ahead log [1]. WAL improves concurrency [1].'
+    expect(verifyCitationLexicalSupport(repaired, original, sampleSourcePack))
+      .toEqual({ supported: true, addedCount: 1 })
+  })
+
+  it('applies the addition cap to repeated identifiers', () => {
+    const original = 'SQLite uses a write-ahead log [1].'
+    const repaired = original + ' WAL improves concurrency [1].'.repeat(9)
+    expect(verifyCitationLexicalSupport(repaired, original, sampleSourcePack))
+      .toEqual({ supported: false, addedCount: 9 })
+  })
+
+  it('accepts repair when newly added citation has lexical overlap with claim', () => {
+    const original = 'KeepIndex uses BM25. SQLite supports WAL [1].'
+    const repaired = 'KeepIndex uses BM25 index [L1]. SQLite supports WAL [1].'
+    const res = verifyCitationLexicalSupport(repaired, original, sampleSourcePack)
+    expect(res.supported).toBe(true)
+    expect(res.addedCount).toBe(1)
+  })
+
+  it('rejects repair when newly added citation lacks lexical overlap with the claim', () => {
+    const original = 'KeepIndex uses vector embeddings. SQLite supports WAL [1].'
+    // Model adds [2] (HTTP Semantics) to vector embeddings claim
+    const repaired = 'KeepIndex uses vector embeddings [2]. SQLite supports WAL [1].'
+    const res = verifyCitationLexicalSupport(repaired, original, sampleSourcePack)
+    expect(res.supported).toBe(false)
+    expect(res.addedCount).toBe(1)
+  })
+
+  it('rejects repair when newly added citation references a non-existent identifier', () => {
+    const original = 'SQLite supports WAL.'
+    const repaired = 'SQLite supports WAL [99].'
+    const res = verifyCitationLexicalSupport(repaired, original, sampleSourcePack)
+    expect(res.supported).toBe(false)
+  })
+
+  it('caps newly introduced identifiers to at most 8 per pass', () => {
+    const original = 'Text without citations.'
+    const repairedMany = 'A [1]. B [2]. C [3]. D [4]. E [5]. F [6]. G [7]. H [8]. I [9].'
+    const res = verifyCitationLexicalSupport(repairedMany, original, sampleSourcePack)
+    expect(res.supported).toBe(false)
+    expect(res.addedCount).toBeGreaterThan(8)
   })
 })

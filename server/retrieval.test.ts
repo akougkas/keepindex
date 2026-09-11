@@ -11,6 +11,7 @@ import {
   deriveRankingQueries,
   domainQuality,
   hostOf,
+  mergeRankingQueries,
   queryRelevance,
   queryTokenCoverage,
   rankWebResults,
@@ -291,6 +292,14 @@ describe('ranking signals', () => {
     )).not.toBe('fixed/token')
   })
 
+  it('preserves misspelled person queries while adding biography and affiliation searches', () => {
+    expect(deriveDiscoveryQueries('ho is Marina Stavrakantonaki')).toEqual([
+      'ho is Marina Stavrakantonaki',
+      'Marina Stavrakantonaki official biography',
+      'Marina Stavrakantonaki profile affiliation',
+    ])
+  })
+
   it('resolves Retry-After status questions to bounded official RFC identities', () => {
     expect(deriveAuthoritativeSourceSeeds('Is Retry-After required for 429 and allowed for 503?'))
       .toEqual(expect.arrayContaining([
@@ -536,6 +545,30 @@ describe('rankWebResults', () => {
     expect(ranked[0].url).toBe('https://sqlite.org/wal.html')
   })
 
+  it('neutralizes recency bonus and rank prior for history results (KIX-04)', () => {
+    const webResult = result({
+      url: 'https://docs.example.com/topic',
+      title: 'Documentation on topic',
+      snippet: 'Guide to topic and architecture.',
+      rank: 1,
+      publishedDate: new Date(NOW).toISOString(),
+      sourceType: 'web',
+    })
+    const historyResult = result({
+      url: 'https://history.example.com/topic',
+      title: 'Documentation on topic',
+      snippet: 'Guide to topic and architecture.',
+      rank: 1,
+      publishedDate: new Date(NOW).toISOString(),
+      sourceType: 'history',
+    })
+    const ranked = rankWebResults('topic', [webResult, historyResult], NOW)
+    const rankedWeb = ranked.find((r) => r.url === webResult.url)!
+    const rankedHistory = ranked.find((r) => r.url === historyResult.url)!
+
+    expect(rankedWeb.relevanceScore).toBeGreaterThan(rankedHistory.relevanceScore)
+  })
+
   it('is order-independent: shuffled input yields the same ranking', () => {
     const input = [
       result({ url: 'https://a.example.com/1', title: 'alpha topic', snippet: 'alpha', rank: 1 }),
@@ -559,6 +592,25 @@ describe('rankWebResults', () => {
     expect(ranked).toHaveLength(2)
     expect(ranked[0].url).toBe('https://two.example.com/b')
     expect(ranked[0].engines).toHaveLength(3)
+  })
+
+  it('does not inflate engine agreement bonus when multiple branches return the same engine (KIX-12)', () => {
+    const ranked = rankWebResults('kubernetes ingress', [
+      result({ url: 'https://one.example.com/a', title: 'kubernetes ingress guide', snippet: 'ingress', rank: 2, engines: ['bing'], mergedCount: 3 }),
+      result({ url: 'https://two.example.com/b', title: 'kubernetes ingress guide', snippet: 'ingress', rank: 2, engines: ['bing'], mergedCount: 1 }),
+    ], NOW)
+
+    expect(ranked).toHaveLength(2)
+    expect(ranked[0].relevanceScore).toBe(ranked[1].relevanceScore)
+  })
+
+  it('pins primary query as element 0 in mergeRankingQueries regardless of alphabetization (KIX-11)', () => {
+    const primaryQuery = 'zzz primary query'
+    const otherQueries = Array.from({ length: 20 }, (_, i) => `aaa query branch ${String(i).padStart(2, '0')}`)
+    const merged = mergeRankingQueries(primaryQuery, otherQueries)
+    expect(merged).toBeDefined()
+    expect(merged![0]).toBe('zzz primary query')
+    expect(merged!.length).toBeLessThanOrEqual(16)
   })
 
   it('produces a stable score independent of a missing rank field', () => {
@@ -899,6 +951,54 @@ describe('selectFusedEvidence', () => {
     expect(selected.web).toEqual([])
     expect(selected.local).toHaveLength(8)
     expect(selected.counts.selectedLocal).toBe(8)
+  })
+
+  it('excludes metadataOnly chunks from citable local evidence (KIX-03)', () => {
+    const selected = selectFusedEvidence(
+      [],
+      [
+        { filePath: '/vault/real.md', score: 1.0, normalizedScore: 1.0, queryCoverage: 1.0, queryTermCount: 2, metadataOnly: false },
+        { filePath: '/vault/stub.pdf', score: 1.0, normalizedScore: 1.0, queryCoverage: 1.0, queryTermCount: 2, metadataOnly: true },
+      ],
+      { limit: 5 }
+    )
+
+    expect(selected.local.map((item) => item.filePath)).toEqual(['/vault/real.md'])
+  })
+
+  it('weighted stream allocation does not force 9/9 50/50 alternation (KIX-06)', () => {
+    const webCandidates = Array.from({ length: 18 }, (_, index) =>
+      web(`https://web-${index + 1}.example/result`, 3.5 - index * 0.05)
+    )
+    const localCandidates = Array.from({ length: 18 }, (_, index) =>
+      local(`/vault/chunk-${index + 1}.md`, 1 - index * 0.02, 1, 0.9)
+    )
+
+    const selected = selectFusedEvidence(webCandidates, localCandidates, {
+      limit: 18,
+      webWeight: 1,
+      localWeight: 0.92,
+    })
+
+    expect(selected.web.length).toBeGreaterThan(selected.local.length)
+    expect(selected.web.length).not.toBe(9)
+  })
+
+  it('keeps passage overlap check active across widening diversity tiers (KIX-07)', () => {
+    const overlappingLocal = Array.from({ length: 10 }, (_, index) => ({
+      ...local('/vault/crowded.md', 1 - index * 0.01, 1),
+      startLine: 1 + index * 2,
+      endLine: 40,
+    }))
+    const otherLocal = local('/vault/other.md', 0.8, 1)
+
+    const selected = selectFusedEvidence([], [...overlappingLocal, otherLocal], {
+      limit: 10,
+      maxPerFile: 2,
+    })
+
+    expect(selected.local).toHaveLength(2)
+    expect(selected.local.filter((c) => c.filePath === '/vault/crowded.md')).toHaveLength(1)
   })
 })
 

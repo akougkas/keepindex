@@ -70,4 +70,29 @@ describe('weighted reciprocal-rank fusion', () => {
     expect(fused.results.filter((item) => item.kind === 'web')).toHaveLength(3)
     expect(fused.results.filter((item) => item.kind === 'note')).toHaveLength(3)
   })
+
+  test('rejects irrelevant local chunks with low query coverage or near-zero raw score (KIX-01)', () => {
+    const web = [result('web', 'web-1', { score: 0.95 })]
+    // Local candidate that has relative batch score 1.0, but only 1/4 terms matched (coverage 0.25 < floor 0.34)
+    const lowCoverageLocal = result('note', 'irrelevant-vault-note', {
+      score: 1.0, // relative score
+      rawScore: 0.12,
+      queryCoverage: 0.25,
+      queryTermCount: 4,
+    })
+    const nearZeroScoreLocal = result('note', 'negligible-match', {
+      score: 1.0,
+      rawScore: 0.01, // below minRelevanceScore 0.05
+      queryCoverage: 1.0,
+      queryTermCount: 1,
+    })
+    const fused = fuseFederatedSearch({
+      web,
+      local: [lowCoverageLocal, nearZeroScoreLocal],
+      history: [],
+    }, 5)
+
+    expect(fused.results.map((item) => item.id)).toEqual(['web-1'])
+    expect(fused.counts.local).toBe(0)
+  })
 })

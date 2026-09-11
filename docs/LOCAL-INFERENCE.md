@@ -1,6 +1,6 @@
 # Local inference providers
 
-KeepIndex sends prompts and bounded evidence packs only to inference servers inside a user-controlled local network boundary. It has no public model-provider adapter, API-key setting, cloud fallback, or credential-bearing inference URL.
+KeepIndex sends prompts and bounded evidence packs only to inference servers inside a user-controlled local network boundary. Authenticated private gateways can use a Bearer token. It has no public model-provider adapter, cloud fallback, or credential-bearing inference URL.
 
 ## Provider selection
 
@@ -16,6 +16,10 @@ The provider selector accepts:
 - `ollama` — use native `/api/tags` and `/api/chat` only.
 
 Auto-detection pins the working transport after discovery. It does not probe a public registry or download a model.
+
+For an authenticated private gateway, set `LLM_API_KEY` in your untracked `.env` file alongside `LLM_URL`. Compose forwards this variable to the application. Native KeepIndex and `keepidx doctor` use the same variable. Copy the gateway's token value into `LLM_API_KEY`; provider-specific variables such as `LITELLM_API_KEY` are not read by KeepIndex. Leave the value empty for an unauthenticated local server.
+
+The token is sent only to the configured inference endpoint for model discovery, completions, embeddings, and optional slot checks. The endpoint policy below still applies. Configure the gateway itself to route the selected models to runtimes within your intended private boundary.
 
 ## Supported local engines
 
@@ -44,6 +48,8 @@ LLM_FALLBACK_MODEL=
 ```
 
 Set these only to identifiers the active local server advertises. KeepIndex ships no hardcoded production model.
+
+The model selector also accepts an identifier without its gateway route prefix (for example, `model-name` for `gateway/model-name`). An exact advertised identifier always wins. Use the full identifier when several routes advertise the same model, and for `LLM_MODEL` and `LLM_FALLBACK_MODEL`.
 
 Native Ollama results are normalized into the same internal catalog and completion shapes as compatible providers. Native streaming keeps answer content, finish reason, token counts, and timing data while deliberately discarding private reasoning fields. A malformed or incomplete stream still reaches the existing fail-closed terminal-frame checks.
 

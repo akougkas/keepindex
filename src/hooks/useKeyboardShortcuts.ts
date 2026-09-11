@@ -101,8 +101,50 @@ export function useKeyboardShortcuts(
           }
           break
         }
+        case '1':
+          if (!e.altKey) break
+          e.preventDefault()
+          useAppStore.getState().setMode('search')
+          break
+        case '2':
+          if (!e.altKey) break
+          e.preventDefault()
+          useAppStore.getState().setMode('ai')
+          break
+        case '3':
+          if (!e.altKey) break
+          e.preventDefault()
+          useAppStore.getState().setMode('chat')
+          break
+        case '4':
+          if (!e.altKey) break
+          e.preventDefault()
+          useAppStore.getState().setMode('research')
+          break
+        case 't': {
+          if (!e.altKey) break
+          e.preventDefault()
+          const targets = ['all', 'web', 'vault', 'files', 'documents', 'history'] as const
+          const current = useAppStore.getState().searchTarget
+          const nextIndex = (targets.indexOf(current) + 1) % targets.length
+          useAppStore.getState().setSearchTarget(targets[nextIndex])
+          break
+        }
+        case '?':
+          if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+            e.preventDefault()
+            onOpenCommandPalette()
+          }
+          break
         default:
-          if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+          if ((e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === 'c') {
+            const { mode, answer, researchReport } = useAppStore.getState()
+            const textToCopy = mode === 'research' ? researchReport : answer
+            if (textToCopy) {
+              e.preventDefault()
+              void navigator.clipboard.writeText(textToCopy)
+            }
+          } else if ((e.ctrlKey || e.metaKey) && e.key === 's') {
             e.preventDefault()
             saveCurrentAnswer()
           } else if ((e.ctrlKey || e.metaKey) && e.key === 'k') {

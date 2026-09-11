@@ -278,6 +278,7 @@ function App() {
           onClose={() => setCommandPaletteOpen(false)}
           omnibarRef={omnibarRef}
           onOpenSettings={() => setSettingsOpen(true)}
+          onOpenKnowledge={() => setKnowledgeOpen(true)}
         />
         <SourcePreviewDrawer />
       </Suspense>

@@ -30,6 +30,7 @@ export type PersistedKnowledgeResource = {
   path: string
   label: string
   kind?: 'obsidian' | 'folder'
+  excludedPatterns?: string[]
   indexedAt: number
   latestModifiedAt: number
   fileCount: number

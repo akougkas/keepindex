@@ -3,7 +3,7 @@ import { bodyLimit } from 'hono/body-limit'
 import { cors } from 'hono/cors'
 import { streamSSE } from 'hono/streaming'
 import { readdir, readFile, stat, realpath, mkdir, writeFile } from 'node:fs/promises'
-import { basename, extname, join, resolve } from 'node:path'
+import { basename, extname, join, relative, resolve } from 'node:path'
 import {
   beginQueryRecord,
   clearBrowserHistory,
@@ -176,8 +176,9 @@ function boundedEnvInt(raw: string | undefined, fallback: number, minimum: numbe
 
 const SEARXNG_URL = process.env.SEARXNG_URL || 'http://127.0.0.1:8888'
 const LLM_URL = requireLocalInferenceEndpoint(process.env.LLM_URL || 'http://127.0.0.1:8080')
+const LLM_API_KEY = process.env.LLM_API_KEY?.trim()
 const EMBEDDING_MODEL = readKeepIndexEnvironment('EMBEDDING_MODEL') || ''
-const INFERENCE_TRANSPORT = new LocalInferenceTransport(LLM_URL, resolveInferenceAdapter())
+const INFERENCE_TRANSPORT = new LocalInferenceTransport(LLM_URL, resolveInferenceAdapter(), undefined, LLM_API_KEY)
 const WEB_SEARCH_PROVIDER = 'searxng'
 const LOCAL_SEARCH_PROVIDER = 'local-hybrid-bm25'
 const HISTORY_SEARCH_PROVIDER = 'browser-history-fts5'
@@ -493,11 +494,11 @@ function invalidateCollectionHostPreferences(): void {
 function toWslPath(inputPath: string): string {
   const raw = inputPath.trim()
 
-  // Windows UNC path to WSL distro: \\wsl$\Distro\home\user\vault -> /home/user/vault
-  if (raw.startsWith('\\\\wsl$\\')) {
+  // Windows UNC path to WSL distro: \\wsl$\Distro\home\... or \\wsl.localhost\Distro\home\...
+  if (/^[\\/]{2}wsl(?:\$|\.localhost)[\\/]/i.test(raw)) {
     const normalized = raw.replace(/\\/g, '/')
-    const parts = normalized.split('/')
-    if (parts.length >= 5) return '/' + parts.slice(4).join('/')
+    const parts = normalized.split('/').filter(Boolean)
+    if (parts.length >= 3) return '/' + parts.slice(2).join('/')
   }
 
   // Windows drive path: C:\Users\name\vault or C:/Users/name/vault -> /mnt/c/Users/name/vault
@@ -583,12 +584,13 @@ function formatWebSourcesForPrompt(results: SearchResult[]): string {
 }
 
 function formatLocalSourcesForPrompt(
-  results: Array<{ filePath: string; fileName: string; content: string; startLine?: number; endLine?: number }>
+  results: Array<{ filePath: string; fileName: string; content: string; startLine?: number; endLine?: number; metadataOnly?: boolean }>
 ): string {
-  if (results.length === 0) return ''
-  return `\n\nLocal Knowledge:\n${results
+  const citable = results.filter((r) => !r.metadataOnly)
+  if (citable.length === 0) return ''
+  return `\n\nLocal Knowledge:\n${citable
     .map((r, i) => {
-      const lineTag = r.startLine ? ` (L${r.startLine}${r.endLine && r.endLine !== r.startLine ? `-${r.endLine}` : ''})` : ''
+      const lineTag = r.startLine ? ` (lines ${r.startLine}${r.endLine && r.endLine !== r.startLine ? `-${r.endLine}` : ''})` : ''
       return `[L${i + 1}] ${truncateText(r.fileName || basename(r.filePath), 100)} @ ${compactFilePath(r.filePath)}${lineTag} — ${truncateText(r.content, MAX_LOCAL_SNIPPET_CHARS)}`
     })
     .join('\n\n')}`
@@ -899,12 +901,18 @@ function normalizeServerModels(data: unknown): ServerModelInfo[] {
   return models
 }
 
+function findAdvertisedModel(models: ServerModelInfo[], requested: string): ServerModelInfo | undefined {
+  if (!requested) return undefined
+  return models.find((model) => model.id === requested)
+    ?? models.find((model) => model.id.endsWith(`/${requested}`))
+}
+
 function adoptServerModels(models: ServerModelInfo[]): void {
   if (models.length === 0) return
   knownModels = models
   const advertisedIds = new Set(models.map((model) => model.id))
   if (!advertisedIds.has(activeDefaultModel)) {
-    activeDefaultModel = DEFAULT_MODEL && advertisedIds.has(DEFAULT_MODEL) ? DEFAULT_MODEL : models[0].id
+    activeDefaultModel = findAdvertisedModel(models, DEFAULT_MODEL)?.id ?? models[0].id
   }
 }
 
@@ -974,10 +982,17 @@ async function fetchLlmChatCompletions(
   const candidates = Array.from(new Set([requestedModel, DEFAULT_MODEL, FALLBACK_MODEL].filter(Boolean)))
   let lastResponse: Response | null = null
   let lastError: unknown = null
+  const deadline = Date.now() + timeoutMs
 
   for (const candidateModel of candidates) {
     for (let attempt = 0; attempt <= retries; attempt++) {
-      const { signal, cleanup } = createTimeoutSignal(options.signal, timeoutMs)
+      const remainingMs = deadline - Date.now()
+      if (remainingMs <= 0) {
+        throw lastError instanceof Error
+          ? lastError
+          : new Error(`LLM request timed out after ${timeoutMs}ms`)
+      }
+      const { signal, cleanup } = createTimeoutSignal(options.signal, remainingMs)
       let retainCleanupUntilBodyConsumed = false
       try {
         const response = await INFERENCE_TRANSPORT.chat({
@@ -991,7 +1006,6 @@ async function fetchLlmChatCompletions(
         })
         lastResponse = response
         if (response.ok) {
-          activeDefaultModel = candidateModel
           responseModel.set(response, getInferenceResponseModel(response) ?? candidateModel)
           // Fetch resolves when headers arrive. Keep both the request-abort
           // listener and absolute timeout alive until JSON/SSE body consumption
@@ -1008,7 +1022,10 @@ async function fetchLlmChatCompletions(
         if (!retainCleanupUntilBodyConsumed) cleanup()
       }
 
-      if (attempt < retries) await delayWithSignal(200 * (attempt + 1), options.signal)
+      const retryDelay = 200 * (attempt + 1)
+      if (attempt < retries && Date.now() + retryDelay < deadline) {
+        await delayWithSignal(retryDelay, options.signal)
+      }
     }
   }
 
@@ -1063,11 +1080,13 @@ async function fetchLocalEmbeddings(inputs: string[], signal: AbortSignal): Prom
   if (!EMBEDDING_MODEL || inputs.length === 0) return []
   const timed = createTimeoutSignal(signal, 12_000)
   try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' }
+    if (LLM_API_KEY) headers.Authorization = `Bearer ${LLM_API_KEY}`
     const response = await fetch(`${LLM_URL}/v1/embeddings`, {
       method: 'POST',
       redirect: LOCAL_INFERENCE_REDIRECT_POLICY,
       signal: timed.signal,
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers,
       body: JSON.stringify({ model: EMBEDDING_MODEL, input: inputs }),
     })
     if (!response.ok) return []
@@ -1355,6 +1374,8 @@ export type GroundingAssessment = {
   sourceCount: number
   invalidCitations: string[]
   note: string
+  addedCitationCount?: number
+  truncated?: boolean
 }
 
 /**
@@ -1366,12 +1387,24 @@ export type GroundingAssessment = {
 const CITATION_GROUP_PATTERN = /\[\s*(L?\d+(?:\s*[,;]\s*L?\d+)*)\s*[,;]?\s*\]/gi
 
 export function extractCitationIds(text: string): string[] {
-  return Array.from(text.matchAll(CITATION_GROUP_PATTERN)).flatMap((match) =>
-    match[1]
-      .split(/[,;]/)
-      .map((identifier) => identifier.trim().toUpperCase())
-      .filter(Boolean)
-  )
+  return Array.from(text.matchAll(CITATION_GROUP_PATTERN)).flatMap((match) => {
+    // Semicolons separate distinct citation groupings (e.g. [1; L2] or [L1, 2; 3, 4]).
+    // Commas within a grouping propagate a leading 'L' prefix across numbers (e.g. [L1, 2] -> L1, L2).
+    const clauses = match[1].split(';').map((c) => c.trim()).filter(Boolean)
+    return clauses.flatMap((clause) => {
+      const members = clause
+        .split(',')
+        .map((identifier) => identifier.trim().toUpperCase())
+        .filter(Boolean)
+      const leadingPrefix = members[0]?.startsWith('L') ? 'L' : ''
+      return members.map((member) => {
+        if (leadingPrefix && !member.startsWith('L')) {
+          return `${leadingPrefix}${member}`
+        }
+        return member
+      })
+    })
+  })
 }
 
 function normalizeGroundingProse(text: string): string {
@@ -1563,7 +1596,7 @@ function applyTrailingBlockquoteCitationScope(
       if (opening < 0 || closing <= opening || closing > trailingStart) continue
 
       const attribution = line.slice(0, opening)
-      if (!/\bRFC\s+\d+\b[^\n]{0,240}\b(?:states?|defines?|specifies?|says?|requires?|permits?|allows?)\b/i.test(attribution)) {
+      if (!/\b(?:RFC\s+\d+|\[L?\d+\]|the\s+(?:local\s+)?(?:note|document|file|doc|runbook|specification|vault|source|spec)\b|[a-z0-9_.-]+\.md\b)[^\n]{0,240}\b(?:states?|defines?|specifies?|says?|requires?|permits?|allows?|notes?|describes?)\b/i.test(attribution)) {
         continue
       }
 
@@ -1585,7 +1618,7 @@ function applyTrailingBlockquoteCitationScope(
   // quotation that supplies its evidence. Allow direct adjacency or the one
   // blank line Markdown commonly places before a blockquote; two blank lines,
   // intervening prose, arbitrary colon leads, and list items do not match.
-  const attributedBlockquote = /(^[ \t]{0,3}(?:Per\s+RFC\b|According\s+to\b|As\s+stated\s+in\b)[^\n]{0,240}:[ \t]*)(\n(?:[ \t]*\n)?)((?:[ \t]{0,3}>[^\n]*(?:\n|$))+)/gmi
+  const attributedBlockquote = /(^[ \t]{0,3}(?:Per\s+(?:RFC|the\s+(?:local\s+)?(?:note|vault|document|spec))\b|According\s+to\b|As\s+stated\s+in\b)[^\n]{0,240}:[ \t]*)(\n(?:[ \t]*\n)?)((?:[ \t]{0,3}>[^\n]*(?:\n|$))+)/gmi
   const attributedProse = attributedInlineProse.replace(
     attributedBlockquote,
     (match, lead: string, gap: string, block: string) => {
@@ -1831,6 +1864,69 @@ function pruneUncitedResearchClaims(options: {
     : null
 }
 
+function extractSourceExcerptsFromPack(sourcePack: string): Map<string, string> {
+  const excerpts = new Map<string, string>()
+  const regex = /\[([Ll]?\d+)\]\s+(?:.+?)\s+—\s+([\s\S]+?)(?=(?:\n\s*\[[Ll]?\d+\]|\n\n(?:Local Knowledge|Web Sources):|$))/g
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(sourcePack)) !== null) {
+    excerpts.set(match[1].toUpperCase(), match[2])
+  }
+  return excerpts
+}
+
+function citationSupportSegments(text: string): string[] {
+  return normalizeGroundingProse(text)
+    .replace(/^[ \t]*#{1,6}[ \t].*$/gm, '\n\n')
+    .split(
+      /(?<=[.!?])\s+(?!\[\s*L?\d)|(?<=[.!?]\s?\[[^\]]{1,16}\])\s+(?=[A-Z])|\n{2,}|\n(?=[ \t]*(?:[-*+]|\d+[.)])[ \t])|\n(?=[ \t]*\|)/
+    )
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+}
+
+function verifyCitationLexicalSupport(
+  repairedText: string,
+  originalText: string,
+  sourcePack: string
+): { supported: boolean; addedCount: number } {
+  // Track claim/citation occurrences, not just identifiers. An existing [1]
+  // grants no authority to repeat it on another claim or move it there.
+  const originalPairs = new Map<string, number>()
+  const claimText = (segment: string) => segment.replace(CITATION_GROUP_PATTERN, '')
+    .replace(/\s+([.,!?;:])/g, '$1').replace(/\s+/g, ' ').trim()
+  const pairKey = (claim: string, id: string) => JSON.stringify([claim, id])
+  for (const segment of citationSupportSegments(originalText)) {
+    for (const id of extractCitationIds(segment)) {
+      const key = pairKey(claimText(segment), id)
+      originalPairs.set(key, (originalPairs.get(key) ?? 0) + 1)
+    }
+  }
+
+  const additions: Array<{ claim: string; id: string }> = []
+  for (const segment of citationSupportSegments(repairedText)) {
+    const claim = claimText(segment)
+    for (const id of extractCitationIds(segment)) {
+      const key = pairKey(claim, id)
+      const remaining = originalPairs.get(key) ?? 0
+      if (remaining > 0) originalPairs.set(key, remaining - 1)
+      else additions.push({ claim, id })
+    }
+  }
+
+  const addedCount = additions.length
+  if (addedCount > 8) return { supported: false, addedCount }
+  const excerpts = extractSourceExcerptsFromPack(sourcePack)
+  for (const { claim, id } of additions) {
+    const excerpt = excerpts.get(id)
+    if (!excerpt) return { supported: false, addedCount }
+    const excerptTokens = new Set(tokenizeQuery(excerpt))
+    if (!tokenizeQuery(claim).some((token) => excerptTokens.has(token))) {
+      return { supported: false, addedCount }
+    }
+  }
+  return { supported: true, addedCount }
+}
+
 async function repairCitationCoverage(options: {
   text: string
   sourcePack: string
@@ -1968,7 +2064,13 @@ ${options.text}
     options.webSourceCount,
     options.localSourceCount
   )
+
+  const lexicalSupport = strategy === 'source-aware'
+    ? verifyCitationLexicalSupport(repaired, options.text, options.sourcePack)
+    : { supported: true, addedCount: 0 }
+
   if (
+    !lexicalSupport.supported ||
     lengthRatio < (strategy === 'safe-cleanup' ? 0.85 : 0.65) ||
     lengthRatio > (strategy === 'safe-cleanup' ? 1.15 : 1.35) ||
     !keptStructure ||
@@ -1977,6 +2079,7 @@ ${options.text}
     repairedQuality.citationCoveragePct <= originalQuality.citationCoveragePct
   ) return null
 
+  repairedQuality.addedCitationCount = lexicalSupport.addedCount
   return { text: repaired, quality: repairedQuality }
 }
 
@@ -2361,9 +2464,14 @@ type IndexDirectoryResult = {
   skippedUnreadableFiles: number
 }
 
-const EXCLUDED_DIRECTORY_NAMES = new Set([
+export const DEFAULT_EXCLUDED_DIRECTORIES = new Set([
   '.git', '.hg', '.svn', '.obsidian', '.trash', '.cache',
   'node_modules', 'dist', 'build', 'coverage', '__pycache__', '.venv', 'venv',
+  'repomix-output', '__NUKED', 'experiment-results', '.turbo', 'turbo',
+  '.next', 'next', '.nuxt', 'nuxt', '.output', 'output', 'target',
+  'bin', 'obj', '.pytest_cache', '.mypy_cache', '.ruff_cache',
+  '.yarn', '.pnpm', 'tmp', 'temp',
+  'lancedb', '.lancedb', 'chroma', '.chroma',
 ])
 
 function metadataFallback(fullPath: string, fileName: string, size: number, modifiedAt: number, obsidianRoot: boolean): {
@@ -2394,7 +2502,8 @@ async function indexDirectory(
   limits: { maxFiles: number; maxChunks: number } = {
     maxFiles: MAX_INDEXED_FILES,
     maxChunks: MAX_INDEXED_CHUNKS,
-  }
+  },
+  customExcludePatterns: string[] = []
 ): Promise<IndexDirectoryResult> {
   const chunks: KnowledgeChunk[] = []
   const formatCounts: Record<string, number> = {}
@@ -2428,13 +2537,28 @@ async function indexDirectory(
       const full = join(dir, e.name)
       if (e.isSymbolicLink()) continue
       if (e.isDirectory()) {
-        if (!EXCLUDED_DIRECTORY_NAMES.has(e.name) && !e.name.startsWith('.')) await walk(full)
+        const lowerName = e.name.toLowerCase()
+        const isExcluded =
+          DEFAULT_EXCLUDED_DIRECTORIES.has(e.name) ||
+          DEFAULT_EXCLUDED_DIRECTORIES.has(lowerName) ||
+          e.name.startsWith('.') ||
+          customExcludePatterns.some((pattern) => {
+            const rel = relative(dirPath, full)
+            return e.name === pattern || rel.includes(pattern)
+          })
+        if (!isExcluded) await walk(full)
         continue
       }
       if (!e.isFile()) continue
       if (e.name.startsWith('.') || SENSITIVE_FILE_PATTERN.test(e.name)) {
         skippedSensitiveFiles += 1
         continue
+      }
+      if (customExcludePatterns.length > 0) {
+        const rel = relative(dirPath, full)
+        if (customExcludePatterns.some((p) => e.name === p || rel.includes(p))) {
+          continue
+        }
       }
       if (fileCount >= limits.maxFiles || chunks.length >= limits.maxChunks) {
         capped = true
@@ -2637,10 +2761,31 @@ function localChunkMatchesOptions(chunk: KnowledgeChunk, options: LocalSearchOpt
   const metadataText = [
     ...(chunk.metadata?.aliases ?? []),
     ...(chunk.metadata?.tags ?? []),
-  ].join('\n')
-  const haystack = `${chunk.fileName}\n${chunk.filePath}\n${metadataText}\n${chunk.searchContent ?? chunk.content}`.toLowerCase()
-  if (options.phrases?.some((phrase) => !haystack.includes(phrase))) return false
-  if (options.excludedTerms?.some((term) => haystack.includes(term))) return false
+  ].join(' ')
+
+  if (options.phrases?.length) {
+    const collapsedContent = `${chunk.fileName} ${metadataText} ${chunk.searchContent ?? chunk.content}`
+      .replace(/\s+/g, ' ')
+      .toLowerCase()
+    if (options.phrases.some((phrase) => !collapsedContent.includes(phrase.replace(/\s+/g, ' ').toLowerCase()))) {
+      return false
+    }
+  }
+
+  if (options.excludedTerms?.length) {
+    const termFreqs = chunk.termFreqs
+    const fallbackTokens = termFreqs
+      ? null
+      : new Set(tokenizeSearchTerms(`${chunk.fileName} ${metadataText} ${chunk.searchContent ?? chunk.content}`))
+    const hasTerm = (term: string): boolean => {
+      const normalized = term.toLowerCase()
+      if (termFreqs) {
+        return (termFreqs.get(normalized) ?? 0) > 0 || (chunk.nameTokens?.has(normalized) ?? false)
+      }
+      return fallbackTokens!.has(normalized)
+    }
+    if (options.excludedTerms.some((term) => hasTerm(term))) return false
+  }
   return true
 }
 
@@ -2803,10 +2948,7 @@ function attachLocalRetrievalDiagnostics<T extends readonly unknown[]>(
   return results
 }
 
-function searchKnowledge(q: string, limit = 10, inheritedOptions: LocalSearchOptions = {}): KnowledgeSearchResult[] {
-  const parsed = parseLocalSearchQuery(q, inheritedOptions)
-  const searchQuery = parsed.query
-  const options = parsed.options
+function searchKnowledgeCore(searchQuery: string, limit = 10, options: LocalSearchOptions = {}): KnowledgeSearchResult[] {
   // Reuse the web ranker's tokenizer so conversational framing cannot make
   // thousands of local chunks match on "who", "is", or "what" alone.
   const queryTokens = Array.from(new Set(tokenizeQuery(searchQuery)))
@@ -2907,6 +3049,7 @@ function searchKnowledge(q: string, limit = 10, inheritedOptions: LocalSearchOpt
   let rejectedLowCoverage = 0
 
   for (const ch of knowledgeIndex) {
+    if (ch.metadata?.metadataOnly) continue
     if (!localChunkMatchesOptions(ch, options)) continue
     let bm25Score = 0
     let matchedWeight = 0
@@ -2966,9 +3109,10 @@ function searchKnowledge(q: string, limit = 10, inheritedOptions: LocalSearchOpt
       ...(ch.metadata?.outgoingLinks ?? []),
     ].join(' ').toLowerCase()
     const metadataHits = queryTokens.filter((token) => tokenizeSearchTerms(metadataText).includes(token)).length
-    const requiredPhraseHit = (options.phrases ?? []).some((phrase) =>
-      `${ch.fileName}\n${ch.searchContent ?? ch.content}`.toLowerCase().includes(phrase)
-    )
+    const requiredPhraseHit = (options.phrases ?? []).some((phrase) => {
+      const collapsed = `${ch.fileName} ${ch.searchContent ?? ch.content}`.replace(/\s+/g, ' ').toLowerCase()
+      return collapsed.includes(phrase.replace(/\s+/g, ' ').toLowerCase())
+    })
     const boostMultiplier =
       1 +
       0.45 * (nameHits / tokenCount) +
@@ -3079,6 +3223,15 @@ function searchKnowledge(q: string, limit = 10, inheritedOptions: LocalSearchOpt
   })
 }
 
+function searchKnowledge(
+  q: string,
+  limit = 10,
+  inheritedOptions: LocalSearchOptions = {}
+): KnowledgeSearchResult[] {
+  const parsed = parseLocalSearchQuery(q, inheritedOptions)
+  return searchKnowledgeCore(parsed.query, limit, parsed.options)
+}
+
 /**
  * Converts one local-retrieval call to a comparable 0..1 scale. Raw BM25 values
  * are meaningful only within the corpus/query that produced them; comparing a
@@ -3105,10 +3258,10 @@ function searchKnowledgeAcrossQueries(
   options: LocalSearchOptions = {}
 ): KnowledgeSearchResult[] {
   const bounded = Array.from(new Set(queries.map((query) => query.trim()).filter(Boolean))).slice(0, 3)
-  if (bounded.length <= 1) return searchKnowledge(bounded[0] ?? '', totalLimit, options)
+  if (bounded.length <= 1) return searchKnowledgeCore(bounded[0] ?? '', totalLimit, options)
 
   const branches = bounded.map((query) => {
-    const results = searchKnowledge(query, Math.max(6, Math.ceil(totalLimit / bounded.length) + 2), options)
+    const results = searchKnowledgeCore(query, Math.max(6, Math.ceil(totalLimit / bounded.length) + 2), options)
     return { results, diagnostics: getLocalRetrievalDiagnostics(results) }
   })
   const byChunk = new Map<string, KnowledgeSearchResult>()
@@ -3557,7 +3710,11 @@ async function fetchDiscoverySearchResults(
   }
 
   const outcomes: Array<SearchResult[] | SearchFailure> = []
-  for (const query of boundedQueries) {
+  for (let i = 0; i < boundedQueries.length; i++) {
+    const query = boundedQueries[i]
+    if (i > 0) {
+      await delayWithSignal(300, signal)
+    }
     const outcome = await fetchSearchResults(query, focus, countPerQuery, signal)
     outcomes.push(outcome)
     if (signal.aborted) break
@@ -3656,6 +3813,7 @@ function skippedRetrievalAttempt(provider: string): RetrievalAttemptSnapshot {
 function buildSingleRetrievalDiagnostics(input: {
   strategy: string
   webOutcome: SearchResult[] | SearchFailure
+  webAttempted?: boolean
   selectedWebCount: number
   usableWebCount?: number
   webDetail?: string | null
@@ -3670,6 +3828,7 @@ function buildSingleRetrievalDiagnostics(input: {
     strategy: input.strategy,
     web: {
       provider: web.provider,
+      attempted: input.webAttempted ?? (web.attempts > 0),
       rawCandidateCount: web.rawCandidateCount,
       usableCandidateCount: input.usableWebCount ?? web.usableCandidateCount,
       selectedCount: input.selectedWebCount,
@@ -3832,7 +3991,8 @@ async function resolveKnowledgeDirectoryPath(
 async function indexKnowledgeResource(
   canonicalPath: string,
   requestedLabel: string | undefined,
-  signal: AbortSignal
+  signal: AbortSignal,
+  customExcludePatterns?: string[]
 ): Promise<{ resource: PersistedKnowledgeResource; result: IndexDirectoryResult }> {
   await ensureKnowledgeLoaded()
   return withKnowledgeMutation(async () => {
@@ -3848,6 +4008,7 @@ async function indexKnowledgeResource(
       throw new Error(`Knowledge roots cannot overlap. “${overlap.label}” already covers ${overlap.path}.`)
     }
 
+    const excludedPatterns = customExcludePatterns ?? existing?.excludedPatterns ?? []
     const retainedChunks = existing
       ? knowledgeIndex.filter((chunk) => !isPathInside(canonicalPath, chunk.filePath))
       : [...knowledgeIndex]
@@ -3855,12 +4016,13 @@ async function indexKnowledgeResource(
     const result = await indexDirectory(canonicalPath, signal, {
       maxFiles: Math.max(0, MAX_INDEXED_FILES - retainedFiles),
       maxChunks: Math.max(0, MAX_INDEXED_CHUNKS - retainedChunks.length),
-    })
+    }, excludedPatterns)
     const resource: PersistedKnowledgeResource = {
       id: existing?.id ?? crypto.randomUUID(),
       path: canonicalPath,
       label: normalizeResourceLabel(requestedLabel ?? existing?.label, canonicalPath),
       kind: result.obsidian ? 'obsidian' : 'folder',
+      excludedPatterns: excludedPatterns.length > 0 ? excludedPatterns : undefined,
       indexedAt: Date.now(),
       latestModifiedAt: result.latestModifiedAt,
       fileCount: result.fileCount,
@@ -3909,13 +4071,17 @@ async function removeKnowledgeResource(id: string): Promise<boolean> {
 }
 
 app.get('/api/health', async (c) => {
-  const checkFetch = async (url: string, redirect: RequestInit['redirect'] = 'follow') => {
+  const checkFetch = async (url: string, inference = false) => {
     const startedAt = Date.now()
     try {
+      const headers: Record<string, string> = { Accept: 'application/json' }
+      if (LLM_API_KEY && inference) {
+        headers.Authorization = `Bearer ${LLM_API_KEY}`
+      }
       const response = await fetch(url, {
         signal: AbortSignal.timeout(2500),
-        headers: { Accept: 'application/json' },
-        redirect,
+        headers,
+        redirect: inference ? LOCAL_INFERENCE_REDIRECT_POLICY : 'follow',
       })
       return { ok: response.ok, latencyMs: Date.now() - startedAt, response }
     } catch {
@@ -3939,7 +4105,7 @@ app.get('/api/health', async (c) => {
     checkFetch(`${SEARXNG_URL}/healthz`),
     checkInferenceModels(),
     activeSlotsPath
-      ? checkFetch(`${LLM_URL}${activeSlotsPath}`, LOCAL_INFERENCE_REDIRECT_POLICY)
+      ? checkFetch(`${LLM_URL}${activeSlotsPath}`, true)
       : Promise.resolve({ ok: false, latencyMs: 0, response: null }),
     pingDatabase().then((ok) => ({ ok })).catch(() => ({ ok: false })),
     ensureKnowledgeLoaded().catch(() => undefined),
@@ -4089,23 +4255,23 @@ app.post('/api/models/select', async (c) => {
   const requested = normalizeModel(body.model)
   if (typeof body.model !== 'string' || !body.model.trim()) return c.json({ error: 'model required', activeModel: activeDefaultModel }, 400)
 
-  let available = knownModels.some((model) => model.id === requested)
-  if (!available) {
+  let matching = findAdvertisedModel(knownModels, requested)
+  if (!matching) {
     try {
       const response = await INFERENCE_TRANSPORT.models(AbortSignal.timeout(4000))
       if (response.ok) {
         const models = normalizeServerModels(await response.json())
         if (models.length > 0) knownModels = models
-        available = knownModels.some((model) => model.id === requested)
+        matching = findAdvertisedModel(knownModels, requested)
       }
     } catch {
       // Keep the last-known model catalog during a temporary server outage.
     }
   }
-  if (!available) {
+  if (!matching) {
     return c.json({ error: 'model is not advertised by the local inference server', activeModel: activeDefaultModel }, 400)
   }
-  activeDefaultModel = requested
+  activeDefaultModel = matching.id
   return c.json({ success: true, activeModel: activeDefaultModel })
 })
 
@@ -4330,7 +4496,7 @@ app.delete('/api/browser-history', async (c) => {
 })
 
 app.post('/api/knowledge/index', async (c) => {
-  const body = (await c.req.json()) as { path?: unknown; label?: unknown }
+  const body = (await c.req.json()) as { path?: unknown; label?: unknown; excludedPatterns?: unknown }
   const path = asTrimmedString(body.path, 4000)
   if (!path) return c.json({ error: 'path required' }, 400)
 
@@ -4344,10 +4510,14 @@ app.post('/api/knowledge/index', async (c) => {
     return c.json({ error: INVALID_VAULT_PATH_MESSAGE }, 400)
   }
   try {
+    const excludedPatterns = Array.isArray(body.excludedPatterns)
+      ? body.excludedPatterns.map((p) => asTrimmedString(p, 200)).filter(Boolean)
+      : undefined
     const { resource, result } = await indexKnowledgeResource(
       canonicalPath,
       asTrimmedString(body.label, 80) || undefined,
-      c.req.raw.signal
+      c.req.raw.signal,
+      excludedPatterns
     )
     return c.json({
       indexed: result.chunks.length,
@@ -4667,6 +4837,9 @@ function localToFederated(result: KnowledgeSearchResult, index: number): Federat
     url: '',
     snippet: result.content,
     score: result.normalizedScore ?? result.score,
+    rawScore: result.score,
+    queryCoverage: result.queryCoverage,
+    queryTermCount: result.queryTermCount,
     nativeRank: index + 1,
     sourceTypes: [kind],
     filePath: result.filePath,
@@ -4803,7 +4976,14 @@ async function handleFederatedSearch(c: Context, input: {
       return c.json({ requestId: input.requestId, error: 'request aborted' }, 408)
     }
 
-    const publicWeb = [...run.webResults, ...run.historyResults].map(toSearchApiResult)
+    const selectedWebUrls = new Set(
+      run.fused.results
+        .filter((result) => result.kind === 'web' || result.kind === 'history')
+        .map((result) => canonicalizeUrl(result.url))
+    )
+    const publicWeb = [...run.webResults, ...run.historyResults]
+      .filter((result) => selectedWebUrls.has(canonicalizeUrl(result.url)))
+      .map(toSearchApiResult)
     const selectedLocalIds = new Set(
       run.fused.results.filter((result) => result.filePath).map((result) => result.id)
     )
@@ -4827,6 +5007,7 @@ async function handleFederatedSearch(c: Context, input: {
     const retrievalDiagnostics = buildSingleRetrievalDiagnostics({
       strategy: 'federated-weighted-rrf-v1',
       webOutcome: run.webOutcome,
+      webAttempted: targetIncludesWeb(input.target),
       selectedWebCount: run.fused.counts.web,
       webDetail: [
         `target=${input.target}, history-candidates=${run.historyResults.length}`,
@@ -5097,15 +5278,16 @@ ${generationPolicy.compactContext ? 'Compact-model policy: answer narrowly, avoi
 })
 
 app.post('/api/related', async (c) => {
+  const startedAt = Date.now()
   const body = (await c.req.json()) as { query?: unknown; answer?: unknown; model?: unknown }
   const query = normalizeIncomingQuery(body.query)
   const answer = typeof body.answer === 'string' ? body.answer.trim() : ''
   const targetModel = normalizeModel(body.model || activeDefaultModel)
-  if (answer.length < MIN_RELATED_INPUT_CHARS) return c.json({ questions: [] })
-  if (!query || !answer) return c.json({ questions: [] }, 400)
+  if (answer.length < MIN_RELATED_INPUT_CHARS) return c.json({ status: 'skipped', questions: [] })
+  if (!query || !answer) return c.json({ status: 'unavailable', questions: [] }, 400)
   const cacheKey = `related:${targetModel}::${query.toLowerCase()}::${truncateText(answer.toLowerCase(), 2400)}`
   const cached = getCachedValue(relatedQuestionsCache, cacheKey)
-  if (cached) return c.json({ questions: cached })
+  if (cached) return c.json({ status: 'ok', questions: cached })
 
   const systemPrompt = `You generate follow-up questions for a search engine.
 Return STRICT JSON only: {"questions":["...","...","...","..."]}.
@@ -5127,7 +5309,17 @@ Requirements:
         maxTokens: 300,
       }
     )
-    if (text == null) return c.json({ questions: [] })
+    if (text == null) {
+      void persistTelemetrySafely({
+        kind: 'ask',
+        query,
+        latencyMs: Date.now() - startedAt,
+        success: false,
+        error: 'Follow-up completion returned empty or model unavailable',
+        metadata: { endpoint: '/api/related', model: targetModel },
+      })
+      return c.json({ status: 'unavailable', questions: [] })
+    }
     const parsed = parseJsonObject(text)
     const fromJson = Array.isArray(parsed?.questions)
       ? parsed.questions.filter((q): q is string => typeof q === 'string')
@@ -5143,10 +5335,18 @@ Requirements:
       180
     )
     setCachedValue(relatedQuestionsCache, cacheKey, questions)
-    return c.json({ questions })
+    return c.json({ status: 'ok', questions })
   } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') return c.json({ questions: [] }, 408)
-    return c.json({ questions: [] })
+    if (err instanceof Error && err.name === 'AbortError') return c.json({ status: 'unavailable', questions: [] }, 408)
+    void persistTelemetrySafely({
+      kind: 'ask',
+      query,
+      latencyMs: Date.now() - startedAt,
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to generate related questions',
+      metadata: { endpoint: '/api/related', model: targetModel },
+    })
+    return c.json({ status: 'unavailable', questions: [] })
   }
 })
 
@@ -5383,20 +5583,19 @@ app.on('POST', ['/api/chat', '/api/ask'], async (c) => {
     } else {
       finishEmbeddingRerank('skipped', { mode: 'keyword' })
     }
-    if (localRetrievalQueries.length > 1) {
-      const quotedTitle = /["“”]([^"“”]{3,160})["“”]/.exec(retrievalQuery)?.[1]
-        ?.replace(/\.md$/i, '')
-        .trim()
-        .toLowerCase()
-      if (quotedTitle) {
-        // An explicitly named vault document defines the local scope. Keep the
-        // same array (and its WeakMap diagnostics) while removing tangential
-        // notes that happened to match generic comparison terms.
-        const scoped = localCandidates.filter((candidate) =>
-          candidate.fileName.replace(/\.md$/i, '').trim().toLowerCase() === quotedTitle
-        )
-        if (scoped.length > 0) localCandidates.splice(0, localCandidates.length, ...scoped)
-      }
+    const quotedDocumentTitle = /["“”]([^"“”]{3,160})["“”]/.exec(retrievalQuery)?.[1]
+      ?.replace(/\.md$/i, '')
+      .trim()
+      .toLowerCase()
+    const hasQuotedDocumentTitle = Boolean(quotedDocumentTitle)
+    if (quotedDocumentTitle) {
+      // An explicitly named vault document defines the local scope. Keep the
+      // same array (and its WeakMap diagnostics) while removing tangential
+      // notes that happened to match generic comparison terms.
+      const scoped = localCandidates.filter((candidate) =>
+        candidate.fileName.replace(/\.md$/i, '').trim().toLowerCase() === quotedDocumentTitle
+      )
+      if (scoped.length > 0) localCandidates.splice(0, localCandidates.length, ...scoped)
     }
     const localSearchLatencyMs = Date.now() - localSearchStartedAt
     const [historyCandidates, rawResults] = await Promise.all([historyPromise, rawResultsPromise])
@@ -5404,6 +5603,7 @@ app.on('POST', ['/api/chat', '/api/ask'], async (c) => {
       const retrievalDiagnostics = buildSingleRetrievalDiagnostics({
         strategy: 'weighted-rrf-v1',
         webOutcome: rawResults,
+        webAttempted: allowWeb,
         selectedWebCount: 0,
         local: localRetrievalAttempt(localCandidates, 0, localSearchLatencyMs),
       })
@@ -5477,19 +5677,15 @@ app.on('POST', ['/api/chat', '/api/ask'], async (c) => {
     const normativeHttpVerification =
       /\b(?:normative HTTP specifications?|RFC requirement)\b/i.test(retrievalQuery) &&
       /\bretry[\s-]*after\b/i.test(retrievalQuery)
-    const focusedWebVerification =
-      /\blatest stable\b/i.test(retrievalQuery) || normativeHttpVerification
-    const evidenceLimit = localRetrievalQueries.length > 1
-      ? 10
-      : focusedWebVerification
-        ? 12
-        : 12
+    const evidenceLimit = hasQuotedDocumentTitle ? 10 : 12
     const fusedPack = selectFusedEvidence(ranked, localCandidates, {
       limit: evidenceLimit,
+      webWeight: 1,
+      localWeight: 0.92,
       // When the user names one saved document and asks about several aspects,
       // four passages from that file are evidence diversity, not crowding. The
       // extra passage prevents a chunk boundary from hiding a requested aspect.
-      maxPerFile: localRetrievalQueries.length > 1 ? 4 : MAX_CHUNKS_PER_FILE,
+      maxPerFile: hasQuotedDocumentTitle ? 4 : MAX_CHUNKS_PER_FILE,
     })
     finishRankingAndFusion('ok', {
       selectedWeb: fusedPack.counts.selectedWeb,
@@ -5509,6 +5705,7 @@ app.on('POST', ['/api/chat', '/api/ask'], async (c) => {
     const retrievalDiagnostics = buildSingleRetrievalDiagnostics({
       strategy: 'weighted-rrf-v1',
       webOutcome: rawResults,
+      webAttempted: allowWeb,
       usableWebCount: fusedPack.counts.usableWeb,
       selectedWebCount: fusedPack.counts.selectedWeb,
       webPartial: allowWeb && Array.isArray(rawResults) && webSearchDegraded,
@@ -5542,6 +5739,7 @@ app.on('POST', ['/api/chat', '/api/ask'], async (c) => {
     })
     const results = webForPrompt.map(toPublicSource)
     const localForPrompt = localResults
+      .filter((r) => !r.metadataOnly)
       .map((r) => ({ filePath: r.filePath, fileName: r.fileName, content: r.content, startLine: r.startLine, endLine: r.endLine, resourceId: r.resourceId, resourceLabel: r.resourceLabel, indexedAt: r.indexedAt }))
 
     const finishPromptAssembly = executionTrace.start('prompt_assembly')
@@ -5615,6 +5813,7 @@ ${webSection}${localSection}
       let recordCompleted = false
       let answerText = ''
       let actualModel: string | null = null
+      let currentQuality: GroundingAssessment | null = null
       try {
         await stream.writeSSE({
           event: 'message',
@@ -5845,6 +6044,23 @@ ${webSection}${localSection}
           )
         }
         if (metrics.finishReason === 'length') {
+          const finishGroundingAssessment = executionTrace.start('grounding_assessment')
+          let quality = assessGrounding(answerText, results.length, localResults.length)
+          quality = { ...quality, truncated: true }
+          currentQuality = quality
+          finishGroundingAssessment('ok', {
+            citationCoveragePct: quality.citationCoveragePct,
+            invalidCitations: quality.invalidCitations.length,
+            truncated: true,
+          })
+          await stream.writeSSE({
+            event: 'message',
+            data: JSON.stringify(
+              requestId
+                ? { type: 'quality', data: quality, requestId }
+                : { type: 'quality', data: quality }
+            ),
+          })
           throw new IncompleteLlmStreamError(
             'model reached the generation limit after a partial answer',
             metrics
@@ -5977,6 +6193,7 @@ ${webSection}${localSection}
           answerText,
           sourcePack: sourcesPayload,
           citationIds: extractCitationIds(answerText),
+          grounding: currentQuality ?? null,
           sourceCount: results.length + localResults.length,
           candidateSourceCount: webCandidates.length + localCandidates.length,
           retrievalDiagnostics,
@@ -6044,14 +6261,15 @@ ${webSection}${localSection}
 })
 
 app.post('/api/takeaways', async (c) => {
+  const startedAt = Date.now()
   const body = (await c.req.json()) as { answer?: unknown; model?: unknown }
   const answer = typeof body.answer === 'string' ? body.answer.trim() : ''
   const targetModel = normalizeModel(body.model || activeDefaultModel)
-  if (answer.length < MIN_TAKEAWAY_INPUT_CHARS) return c.json({ takeaways: [] })
-  if (!answer) return c.json({ takeaways: [] }, 400)
+  if (answer.length < MIN_TAKEAWAY_INPUT_CHARS) return c.json({ status: 'skipped', takeaways: [] })
+  if (!answer) return c.json({ status: 'unavailable', takeaways: [] }, 400)
   const cacheKey = `takeaways:${targetModel}::${truncateText(answer.toLowerCase(), 5000)}`
   const cached = getCachedValue(takeawaysCache, cacheKey)
-  if (cached) return c.json({ takeaways: cached })
+  if (cached) return c.json({ status: 'ok', takeaways: cached })
   const systemPrompt = `Extract key takeaways from this text.
 Return STRICT JSON only: {"takeaways":["...", "..."]}.
 Rules:
@@ -6071,7 +6289,17 @@ Rules:
         maxTokens: 320,
       }
     )
-    if (text == null) return c.json({ takeaways: [] })
+    if (text == null) {
+      void persistTelemetrySafely({
+        kind: 'ask',
+        query: truncateText(answer, 120),
+        latencyMs: Date.now() - startedAt,
+        success: false,
+        error: 'Takeaway completion returned empty or model unavailable',
+        metadata: { endpoint: '/api/takeaways', model: targetModel },
+      })
+      return c.json({ status: 'unavailable', takeaways: [] })
+    }
     const parsed = parseJsonObject(text)
     const fromJson = Array.isArray(parsed?.takeaways)
       ? parsed.takeaways.filter((t): t is string => typeof t === 'string')
@@ -6087,10 +6315,18 @@ Rules:
       220
     )
     setCachedValue(takeawaysCache, cacheKey, takeaways)
-    return c.json({ takeaways })
+    return c.json({ status: 'ok', takeaways })
   } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') return c.json({ takeaways: [] }, 408)
-    return c.json({ takeaways: [] })
+    if (err instanceof Error && err.name === 'AbortError') return c.json({ status: 'unavailable', takeaways: [] }, 408)
+    void persistTelemetrySafely({
+      kind: 'ask',
+      query: truncateText(answer, 120),
+      latencyMs: Date.now() - startedAt,
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to generate takeaways',
+      metadata: { endpoint: '/api/takeaways', model: targetModel },
+    })
+    return c.json({ status: 'unavailable', takeaways: [] })
   }
 })
 
@@ -6229,7 +6465,7 @@ app.post('/api/research', async (c) => {
       const fused = selectFusedEvidence(
         rankWebResults(retrievalQuery, allWebResults, nowMs, hostPreferences),
         allLocalResults,
-        { limit: MAX_TOTAL_CONTEXT_SOURCES, maxPerFile: MAX_CHUNKS_PER_FILE }
+        { limit: MAX_TOTAL_CONTEXT_SOURCES, webWeight: 1, localWeight: 0.92, maxPerFile: MAX_CHUNKS_PER_FILE }
       )
       packWeb = fused.web
       packLocal = fused.local
@@ -6409,7 +6645,7 @@ Return STRICT JSON only: {"subQuestions":["...","...","..."]}.
       const analysisPack = selectFusedEvidence(
         rankWebResults(retrievalQuery, allWebResults, Date.now(), hostPreferences),
         allLocalResults,
-        { limit: MAX_TOTAL_CONTEXT_SOURCES, maxPerFile: MAX_CHUNKS_PER_FILE }
+        { limit: MAX_TOTAL_CONTEXT_SOURCES, webWeight: 1, localWeight: 0.92, maxPerFile: MAX_CHUNKS_PER_FILE }
       )
       const analysisWeb = analysisPack.web
       const analysisLocal = analysisPack.local
@@ -6725,6 +6961,9 @@ ${sourcePack}
       // Scored against the pack the model actually received, never the wider
       // accumulator: a citation above the pack size is a fabrication.
       let quality = assessGrounding(reportText, packWeb.length, packLocal.length)
+      if (synthesisMetrics?.finishReason === 'length') {
+        quality = { ...quality, truncated: true }
+      }
       if (!synthesisInterrupted && quality.citationCoveragePct < CITATION_REPAIR_TARGET_PCT) {
         try {
           await writeEvent('thinking_delta', 'Checking sentence-level citations…\n')
@@ -6990,6 +7229,8 @@ export const __test__ = {
   parseResearchPlan,
   normalizeIncomingQuery,
   normalizeModel,
+  findAdvertisedModel,
+  delayWithSignal,
   hasPrivateHistoryProvenance,
   hydratePublicWebEvidence,
   extractLlmDelta,
@@ -7000,6 +7241,8 @@ export const __test__ = {
   isSafeHttpUrl,
   sanitizeConversationMessages,
   searchKnowledge,
+  searchKnowledgeCore,
+  searchKnowledgeAcrossQueries,
   parseLocalSearchQuery,
   getLocalRetrievalDiagnostics,
   rankLocalEvidence,
@@ -7023,9 +7266,13 @@ export const __test__ = {
   MAX_LOCAL_CONTEXT_SOURCES,
   MAX_CHUNKS_PER_FILE,
   SENSITIVE_FILE_PATTERN,
+  DEFAULT_EXCLUDED_DIRECTORIES,
+  indexDirectory,
   shortEntityQuery,
   localChunkMatchesOptions,
   localCoverageFloor,
+  extractSourceExcerptsFromPack,
+  verifyCitationLexicalSupport,
 }
 
 export default app

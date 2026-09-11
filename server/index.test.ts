@@ -1,6 +1,31 @@
 import { describe, expect, it } from 'bun:test'
 import { __test__ } from './index'
 
+describe('gateway model identifiers', () => {
+  const models = ['gateway/model-name', 'model-name', 'other/second-model'].map((id) => ({
+    id, aliases: [], tags: [], isReasoning: false,
+  }))
+
+  it('prefers an exact advertised model over an earlier suffix match', () => {
+    expect(__test__.findAdvertisedModel(models, 'model-name')?.id).toBe('model-name')
+  })
+
+  it('resolves a route prefix while preserving fully qualified selections', () => {
+    expect(__test__.findAdvertisedModel(models, 'second-model')?.id).toBe('other/second-model')
+    expect(__test__.findAdvertisedModel(models, 'gateway/model-name')?.id).toBe('gateway/model-name')
+    expect(__test__.findAdvertisedModel(models, 'missing-model')).toBeUndefined()
+  })
+})
+
+describe('discovery pacing cancellation', () => {
+  it('stops waiting when the request is aborted', async () => {
+    const controller = new AbortController()
+    const delay = __test__.delayWithSignal(30_000, controller.signal)
+    controller.abort()
+    await expect(delay).rejects.toThrow('aborted')
+  })
+})
+
 describe('path normalization and safety', () => {
   it('converts Windows drive paths to WSL paths', () => {
     expect(__test__.toWslPath('C:\\Users\\localuser\\Documents\\vault')).toBe(
@@ -11,6 +36,9 @@ describe('path normalization and safety', () => {
 
   it('converts WSL UNC paths', () => {
     expect(__test__.toWslPath('\\\\wsl$\\Ubuntu\\home\\user\\vault')).toBe('/home/user/vault')
+    expect(__test__.toWslPath('\\\\wsl.localhost\\Ubuntu-24.04\\home\\akougkas\\knowledge_garden')).toBe(
+      '/home/akougkas/knowledge_garden'
+    )
   })
 
   it('allows only subpaths under /home or /mnt', () => {

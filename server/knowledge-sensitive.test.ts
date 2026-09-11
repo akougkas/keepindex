@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'bun:test'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { __test__ } from './index'
 
-const { SENSITIVE_FILE_PATTERN } = __test__
+const { SENSITIVE_FILE_PATTERN, DEFAULT_EXCLUDED_DIRECTORIES, indexDirectory } = __test__
 
 const MUST_SKIP = [
   'pypi token zulipchat-mcp.md',
@@ -93,5 +96,64 @@ describe('SENSITIVE_FILE_PATTERN evaluation is stateless', () => {
       else expect(verdict).toBe(seen)
     }
     expect(SENSITIVE_FILE_PATTERN.lastIndex).toBe(0)
+  })
+})
+
+describe('DEFAULT_EXCLUDED_DIRECTORIES and custom exclude patterns (KIX-23)', () => {
+  it('includes common build, bundle, and experiment directories by default', () => {
+    const requiredExclusions = [
+      '.git',
+      'node_modules',
+      'repomix-output',
+      '__NUKED',
+      'experiment-results',
+      '.turbo',
+      'turbo',
+      '.next',
+      'next',
+      '.nuxt',
+      'nuxt',
+      '.output',
+      'output',
+      'target',
+      'bin',
+      'obj',
+      '.pytest_cache',
+      '.mypy_cache',
+      '.ruff_cache',
+      'tmp',
+      'temp',
+    ]
+    for (const dirName of requiredExclusions) {
+      expect(DEFAULT_EXCLUDED_DIRECTORIES.has(dirName)).toBe(true)
+    }
+  })
+
+  it('indexDirectory skips default excluded folders and custom exclude patterns', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'keepindex-exclude-test-'))
+    try {
+      await mkdir(join(root, 'notes'), { recursive: true })
+      await mkdir(join(root, 'repomix-output'), { recursive: true })
+      await mkdir(join(root, '__NUKED'), { recursive: true })
+      await mkdir(join(root, 'custom-archive'), { recursive: true })
+
+      await writeFile(join(root, 'notes', 'valid-note.md'), '# Valid Note\nContent here.', 'utf-8')
+      await writeFile(join(root, 'repomix-output', 'dump.md'), '# Dump\nShould be skipped.', 'utf-8')
+      await writeFile(join(root, '__NUKED', 'old.md'), '# Old\nShould be skipped.', 'utf-8')
+      await writeFile(join(root, 'custom-archive', 'ignored.md'), '# Archive\nCustom ignored.', 'utf-8')
+      await writeFile(join(root, 'notes', 'draft-secret.md'), '# Draft\nCustom ignored by file pattern.', 'utf-8')
+
+      const result = await indexDirectory(root, undefined, undefined, ['custom-archive', 'draft-secret.md'])
+      const indexedFileNames = result.chunks.map((c) => c.fileName)
+
+      expect(indexedFileNames).toContain('valid-note.md')
+      expect(indexedFileNames).not.toContain('dump.md')
+      expect(indexedFileNames).not.toContain('old.md')
+      expect(indexedFileNames).not.toContain('ignored.md')
+      expect(indexedFileNames).not.toContain('draft-secret.md')
+      expect(result.fileCount).toBe(1)
+    } finally {
+      await rm(root, { recursive: true, force: true }).catch(() => {})
+    }
   })
 })

@@ -377,7 +377,7 @@ export function deriveDiscoveryQueries(
   // outranks the exact person. Preserve the user's query, then add bounded
   // biography/profile branches so first-party identity pages can compete
   // without assuming which same-named person was intended.
-  const personLookup = /^who\s+is\s+([\p{L}][\p{L}.'’\-]*(?:\s+[\p{L}][\p{L}.'’\-]*){1,3})\s*[?!.]*$/iu.exec(original)
+  const personLookup = /^(?:who|ho|whom)\s+is\s+([\p{L}][\p{L}.'’\-]*(?:\s+[\p{L}][\p{L}.'’\-]*){1,3})\s*[?!.]*$/iu.exec(original)
   if (personLookup) {
     const name = personLookup[1].trim()
     priorityVariants.push(`${name} official biography`, `${name} profile affiliation`)
@@ -642,19 +642,41 @@ function normalizeTitleKey(title: string): string {
     .trim()
 }
 
-function mergeRankingQueries(...groups: Array<string[] | undefined>): string[] | undefined {
+export function mergeRankingQueries(
+  pinnedQueryOrGroup?: string | string[],
+  ...remainingGroups: Array<string[] | undefined>
+): string[] | undefined {
+  let pinnedQuery: string | undefined
+  let groups: Array<string[] | undefined>
+
+  if (typeof pinnedQueryOrGroup === 'string') {
+    pinnedQuery = pinnedQueryOrGroup
+    groups = remainingGroups
+  } else {
+    pinnedQuery = undefined
+    groups = [pinnedQueryOrGroup, ...remainingGroups]
+  }
+
   const byKey = new Map<string, string>()
+  const pinnedNormalized = pinnedQuery?.replace(/\s+/g, ' ').trim().slice(0, 1000)
+  const pinnedKey = pinnedNormalized?.toLowerCase()
+
   for (const query of groups.flatMap((group) => group ?? [])) {
     const normalized = query.replace(/\s+/g, ' ').trim().slice(0, 1000)
     if (!normalized) continue
     const key = normalized.toLowerCase()
+    if (key === pinnedKey) continue
     const existing = byKey.get(key)
     if (!existing || normalized < existing) byKey.set(key, normalized)
   }
   const merged = [...byKey.entries()]
-    .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
-    .slice(0, 16)
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+    .slice(0, pinnedNormalized ? 15 : 16)
     .map(([, value]) => value)
+
+  if (pinnedNormalized) {
+    merged.unshift(pinnedNormalized)
+  }
   return merged.length > 0 ? merged : undefined
 }
 
@@ -862,9 +884,9 @@ export function queryRelevance(query: string, result: RankedSearchResult): numbe
 
 /** 0..1, saturating at four engines. Cross-engine agreement is a strong prior. */
 function engineAgreement(result: RankedResult): number {
-  const engineCount = Math.max(result.engines?.length ?? 0, result.mergedCount)
-  if (engineCount <= 1) return 0
-  return Math.min(1, (engineCount - 1) / 3)
+  const distinctEngines = new Set(result.engines ?? []).size
+  if (distinctEngines <= 1) return 0
+  return Math.min(1, (distinctEngines - 1) / 3)
 }
 
 /**
@@ -916,17 +938,19 @@ export function rankWebResults(
   hostPreferences?: HostPreferences
 ): RankedResult[] {
   const deduped = dedupeWebResults(results)
-
   for (const result of deduped) {
+    const isHistory = result.sourceType === 'history'
     // A missing rank is treated as the tail of a 10-result page rather than as
     // rank 1, so results from engines that omit ordering do not win by default.
-    const rank = result.rank ?? 10
-    const prior = 1 / (1 + Math.max(0, rank - 1))
+    // History candidates have no search-engine rank prior, agreement, or recency bonus.
+    const rank = isHistory ? 10 : (result.rank ?? 10)
+    const prior = isHistory ? 0 : 1 / (1 + Math.max(0, rank - 1))
     const quality = domainQuality(result.url)
-    const agreement = engineAgreement(result)
-    const recency = recencyScore(result.publishedDate, nowMs)
+    const agreement = isHistory ? 0 : engineAgreement(result)
+    const recency = isHistory ? 0 : recencyScore(result.publishedDate, nowMs)
     const preference = hostPreferenceScore(result.url, hostPreferences)
     const rankingQueries = mergeRankingQueries(
+      query,
       deriveRankingQueries(query),
       result.rankingQueries?.flatMap((rankingQuery) => deriveRankingQueries(rankingQuery))
     ) ?? [query]
@@ -984,6 +1008,7 @@ export type FusionLocalEvidence = {
   queryCoverage?: number
   /** Distinctive query-term count used to choose the retriever's coverage floor. */
   queryTermCount?: number
+  metadataOnly?: boolean
 }
 
 function substantiallyOverlapsLocalRange(
@@ -1202,8 +1227,9 @@ export function selectFusedEvidence<
 
   const usableLocalSources = localWithScores
     .filter(({ source, normalizedScore, queryCoverage }) =>
+      source.metadataOnly !== true &&
       normalizedScore >= minLocalNormalizedScore &&
-      (source.score == null || (Number.isFinite(source.score) && source.score > 0)) &&
+      (source.score == null || (Number.isFinite(source.score) && source.score >= 0.05)) &&
       (source.queryCoverage == null || (
         queryCoverage != null &&
         queryCoverage >= (
@@ -1264,37 +1290,28 @@ export function selectFusedEvidence<
   const perHost = new Map<string, number>()
   const perFile = new Map<string, number>()
   const selected: Array<FusedEvidence<W, L>> = []
-  const heldBack: Array<FusedEvidence<W, L>> = []
   const selectedKeys = new Set<string>()
-  const heldBackKeys = new Set<string>()
 
   const selectCandidate = (
     candidate: FusedEvidence<W, L>,
-    enforceDiversity: boolean
+    relaxation: number
   ): boolean => {
     const key = stableKey(candidate)
     if (selectedKeys.has(key) || selected.length >= limit) return false
     if (candidate.kind === 'web') {
       const host = hostOf(candidate.source.url) || candidate.source.url
       const used = perHost.get(host) ?? 0
-      if (enforceDiversity && used >= maxPerHost) {
-        if (!heldBackKeys.has(key)) {
-          heldBackKeys.add(key)
-          heldBack.push(candidate)
-        }
+      if (used >= maxPerHost * relaxation) {
         return false
       }
       perHost.set(host, used + 1)
     } else {
       const used = perFile.get(candidate.source.filePath) ?? 0
-      const duplicatesSelectedPassage = enforceDiversity && selected.some((item) =>
+      // Redundant overlapping passages are NEVER selected in any tier.
+      const duplicatesSelectedPassage = selected.some((item) =>
         item.kind === 'local' && substantiallyOverlapsLocalRange(item.source, candidate.source)
       )
-      if (enforceDiversity && (used >= maxPerFile || duplicatesSelectedPassage)) {
-        if (!heldBackKeys.has(key)) {
-          heldBackKeys.add(key)
-          heldBack.push(candidate)
-        }
+      if (duplicatesSelectedPassage || used >= maxPerFile * relaxation) {
         return false
       }
       perFile.set(candidate.source.filePath, used + 1)
@@ -1313,20 +1330,27 @@ export function selectFusedEvidence<
       let reserved = 0
       for (const candidate of kindCandidates) {
         if (reserved >= reservedPerKind || selected.length >= limit) break
-        if (selectCandidate(candidate, true)) reserved += 1
+        if (selectCandidate(candidate, 1)) reserved += 1
       }
     }
   }
 
-  for (const candidate of candidates) {
+  // Progressive widening tiers: strict cap (1x), relaxed cap (2x), and uncapped (Infinity).
+  // The local passage overlap check remains strictly enforced across all tiers.
+  let pending = candidates.filter((c) => !selectedKeys.has(stableKey(c)))
+  for (const relaxation of [1, 2, Infinity]) {
     if (selected.length >= limit) break
-    selectCandidate(candidate, true)
-  }
-
-  heldBack.sort(compareCandidates)
-  for (const candidate of heldBack) {
-    if (selected.length >= limit) break
-    selectCandidate(candidate, false)
+    const heldBack: Array<FusedEvidence<W, L>> = []
+    for (const candidate of pending) {
+      if (selected.length >= limit) {
+        heldBack.push(candidate)
+        continue
+      }
+      if (!selectCandidate(candidate, relaxation)) {
+        heldBack.push(candidate)
+      }
+    }
+    pending = heldBack
   }
 
   selected.sort(compareCandidates)

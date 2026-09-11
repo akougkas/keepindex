@@ -167,6 +167,7 @@ Container users must explicitly mount a selected browser-history database read-o
 | `KEEPINDEX_SEARXNG_PORT` | `8888` | Docker host port for local SearXNG administration |
 | `SEARXNG_URL` | `http://127.0.0.1:8888` | Self-hosted web-retrieval endpoint |
 | `LLM_URL` | `http://127.0.0.1:8080` | Local inference server root; public endpoints are rejected |
+| `LLM_API_KEY` | Empty | Optional Bearer token for an authenticated private inference gateway; Compose forwards it from `.env` |
 | `LLM_MODEL` | First advertised model | Optional preferred local model |
 | `LLM_FALLBACK_MODEL` | Empty | Optional fallback among advertised local models |
 | `KEEPINDEX_EMBEDDING_MODEL` | Empty | Optional local OpenAI-compatible embedding model used to rerank lexical knowledge candidates |

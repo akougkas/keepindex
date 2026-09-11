@@ -348,6 +348,36 @@ describe('keepidx command behavior', () => {
     expect(output.stdout()).toContain('[ok] Inference provider: auto (OpenAI-compatible or native Ollama)')
   })
 
+  test('doctor authenticates only inference probes and rejects their redirects', async () => {
+    const output = outputHarness()
+    const requests: Array<{ url: string; init?: RequestInit }> = []
+    const code = await runCli(['doctor'], {
+      env: {
+        KEEPINDEX_INFERENCE_PROVIDER: 'openai-compatible',
+        LLM_URL: 'http://inference.local:8080',
+        LLM_API_KEY: '  private-gateway-token  ',
+      },
+      cwd: process.cwd(),
+      writeOut: output.writeOut,
+      writeErr: output.writeErr,
+      commandVersion: () => ({ ok: true, detail: 'available' }),
+      probePort: async () => 'available',
+      fetch: async (input, init) => {
+        requests.push({ url: String(input), init })
+        return Response.json({})
+      },
+    })
+    expect(code).toBe(0)
+    const inference = requests.filter(({ url }) => url.startsWith('http://inference.local:8080/'))
+    expect(inference).toHaveLength(1)
+    expect(new Headers(inference[0].init?.headers).get('Authorization')).toBe('Bearer private-gateway-token')
+    expect(inference[0].init?.redirect).toBe('error')
+    for (const request of requests.filter(({ url }) => !url.startsWith('http://inference.local:8080/'))) {
+      expect(new Headers(request.init?.headers).has('Authorization')).toBe(false)
+    }
+    expect(output.stdout() + output.stderr()).not.toContain('private-gateway-token')
+  })
+
   test('doctor rejects an unsupported inference provider deterministically', async () => {
     const output = outputHarness()
     const code = await runCli(['doctor'], {

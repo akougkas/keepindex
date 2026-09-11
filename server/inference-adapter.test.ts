@@ -364,4 +364,50 @@ describe('automatic local adapter probing', () => {
     expect(failed.calls).toHaveLength(1)
     expect(boundedTransport.adapter.kind).toBe('openai-compatible')
   })
+
+  it('forwards Authorization Bearer header when apiKey is configured', async () => {
+    const mock = fetchStub((url) => {
+      if (url.endsWith('/v1/models')) return Response.json({ data: [{ id: 'test-model' }] })
+      return Response.json({
+        id: 'chatcmpl-test',
+        object: 'chat.completion',
+        created: 123456,
+        model: 'test-model',
+        choices: [{ index: 0, message: { role: 'assistant', content: 'hello' } }],
+      })
+    })
+
+    const authenticated = new LocalInferenceTransport(
+      'http://100.124.181.9:4000',
+      resolveInferenceAdapter({ KEEPINDEX_INFERENCE_PROVIDER: 'openai-compatible' }),
+      mock.fetchImpl,
+      '  secret-blade-token  '
+    )
+
+    await authenticated.models(AbortSignal.timeout(2000))
+    expect(mock.calls[0]?.init?.headers).toEqual({
+      Accept: 'application/json',
+      Authorization: 'Bearer secret-blade-token',
+    })
+
+    await authenticated.chat(request())
+    expect(mock.calls[1]?.init?.headers).toEqual({
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer secret-blade-token',
+    })
+  })
+
+  it('omits Authorization header when apiKey is omitted', async () => {
+    const mock = fetchStub(() => Response.json({ data: [] }))
+    const unauthenticated = new LocalInferenceTransport(
+      'http://127.0.0.1:8080',
+      resolveInferenceAdapter({ KEEPINDEX_INFERENCE_PROVIDER: 'openai-compatible' }),
+      mock.fetchImpl
+    )
+    await unauthenticated.models(AbortSignal.timeout(2000))
+    expect(mock.calls[0]?.init?.headers).toEqual({
+      Accept: 'application/json',
+    })
+  })
 })
+

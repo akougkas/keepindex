@@ -211,3 +211,71 @@ describe('date filters with unknown modification time', () => {
     ])
   })
 })
+
+describe('token-bounded exclusion and path-isolated phrase semantics (KIX-08)', () => {
+  test('-term does not exclude a chunk that contains the term as a substring of other words', () => {
+    const emailChunk = chunk(
+      '/home/synthetic/vault/notes/daily-update.md',
+      'Please send an email with the daily implementation details as said in the standup meeting.',
+      { sourceKind: 'note', extension: '.md' }
+    )
+    __test__.setKnowledgeIndex([emailChunk])
+    const results = __test__.searchKnowledge('implementation details -ai', 10)
+    expect(results).toHaveLength(1)
+    expect(results[0].fileName).toBe('daily-update.md')
+  })
+
+  test('-term does not exclude a chunk whose directory path contains the term', () => {
+    const noteInTestDir = chunk(
+      '/home/synthetic/vault/test-fixtures/architecture.md',
+      'Architecture overview of the local indexing engine and pipeline design.',
+      { sourceKind: 'note', extension: '.md' }
+    )
+    __test__.setKnowledgeIndex([noteInTestDir])
+    const results = __test__.searchKnowledge('indexing engine -test', 10)
+    expect(results).toHaveLength(1)
+    expect(results[0].fileName).toBe('architecture.md')
+  })
+
+  test('quoted phrase matches across markdown line wraps with collapsed whitespace', () => {
+    const wrappedNote = chunk(
+      '/home/synthetic/vault/notes/wrap.md',
+      'This document covers machine\nlearning algorithms for offline semantic retrieval.',
+      { sourceKind: 'note', extension: '.md' }
+    )
+    __test__.setKnowledgeIndex([wrappedNote])
+    const results = __test__.searchKnowledge('"machine learning algorithms"', 10)
+    expect(results).toHaveLength(1)
+    expect(results[0].fileName).toBe('wrap.md')
+  })
+
+  test('quoted phrase does not match directory path segments', () => {
+    const note = chunk(
+      '/home/synthetic/vault/user-guides/offline-search.md',
+      'Comprehensive documentation for private search indexing.',
+      { sourceKind: 'note', extension: '.md' }
+    )
+    __test__.setKnowledgeIndex([note])
+    const results = __test__.searchKnowledge('"user guides"', 10)
+    expect(results).toHaveLength(0)
+  })
+
+  test('searchKnowledgeAcrossQueries invokes searchKnowledgeCore directly without re-parsing operators (KIX-09)', () => {
+    const note = chunk(
+      '/home/synthetic/vault/notes/operator-query.md',
+      'Discussion about tag:protocol syntax and -negation operator behaviors in search queries.',
+      { sourceKind: 'note', extension: '.md' }
+    )
+    __test__.setKnowledgeIndex([note])
+
+    // Under searchKnowledge, "tag:protocol" would be parsed away into an options filter and query becomes empty
+    const directResults = __test__.searchKnowledgeCore('tag:protocol', 10)
+    expect(directResults).toHaveLength(1)
+    expect(directResults[0].fileName).toBe('operator-query.md')
+
+    const acrossResults = __test__.searchKnowledgeAcrossQueries(['tag:protocol', 'syntax'], 10)
+    expect(acrossResults).toHaveLength(1)
+    expect(acrossResults[0].fileName).toBe('operator-query.md')
+  })
+})
+

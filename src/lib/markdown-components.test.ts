@@ -60,4 +60,13 @@ describe('markdownComponents code rendering', () => {
     expect(markup).toContain('value [3]</code>')
     expect(markup).toContain('<code class="font-mono">block [L4]</code>')
   })
+
+  it('propagates the leading L namespace across grouped local citations', () => {
+    const markup = renderMarkdown('Local evidence proves this [L1, 2; 3, 4].')
+
+    expect(markup).toContain('data-citation="L1"')
+    expect(markup).toContain('data-citation="L2"')
+    expect(markup).toContain('data-citation="3"')
+    expect(markup).toContain('data-citation="4"')
+  })
 })

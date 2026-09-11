@@ -16,8 +16,14 @@ import {
   ArrowDownToLine,
   Pin,
   PinOff,
+  Sparkles,
+  Bot,
+  Compass,
+  Files,
+  Copy,
+  FolderSearch,
 } from 'lucide-react'
-import { useAppStore } from '@/stores/app-store'
+import { useAppStore, type SearchTarget, type Mode } from '@/stores/app-store'
 import { useCollectionsStore } from '@/stores/collections-store'
 import { useJourneyStore } from '@/stores/journey-store'
 import { useKnowledgeStore } from '@/stores/knowledge-store'
@@ -32,6 +38,7 @@ export type CommandAction =
   | { type: 'saveToCollection' }
   | { type: 'openCollections' }
   | { type: 'openSettings' }
+  | { type: 'openKnowledge' }
   | { type: 'toggleTheme' }
   | { type: 'clearResults' }
   | { type: 'focusSearch' }
@@ -41,6 +48,9 @@ export type CommandAction =
   | { type: 'saveJourneyToVault' }
   | { type: 'refineAnswer'; refinement: 'simplify' | 'deeper' }
   | { type: 'togglePin' }
+  | { type: 'switchMode'; mode: Mode }
+  | { type: 'cycleSearchTarget' }
+  | { type: 'copyAnswer' }
 
 interface Command {
   id: string
@@ -141,6 +151,54 @@ const COMMANDS: Command[] = [
     shortcut: '⌥P',
     action: { type: 'togglePin' },
   },
+  {
+    id: 'mode-search',
+    label: 'Switch to Direct Search mode',
+    icon: <Search className="size-4" />,
+    shortcut: '⌥1',
+    action: { type: 'switchMode', mode: 'search' },
+  },
+  {
+    id: 'mode-ai',
+    label: 'Switch to Grounded Answer mode',
+    icon: <Sparkles className="size-4" />,
+    shortcut: '⌥2',
+    action: { type: 'switchMode', mode: 'ai' },
+  },
+  {
+    id: 'mode-chat',
+    label: 'Switch to Conversation mode',
+    icon: <Bot className="size-4" />,
+    shortcut: '⌥3',
+    action: { type: 'switchMode', mode: 'chat' },
+  },
+  {
+    id: 'mode-research',
+    label: 'Switch to Deep Research mode',
+    icon: <Compass className="size-4" />,
+    shortcut: '⌥4',
+    action: { type: 'switchMode', mode: 'research' },
+  },
+  {
+    id: 'target-cycle',
+    label: 'Cycle search target (All / Web / Vault / Files / Docs / History)',
+    icon: <Files className="size-4" />,
+    shortcut: '⌥T',
+    action: { type: 'cycleSearchTarget' },
+  },
+  {
+    id: 'copy-answer',
+    label: 'Copy answer text to clipboard',
+    icon: <Copy className="size-4" />,
+    shortcut: '⌘⌥C',
+    action: { type: 'copyAnswer' },
+  },
+  {
+    id: 'knowledge-settings',
+    label: 'Open Knowledge & Vault settings',
+    icon: <FolderSearch className="size-4" />,
+    action: { type: 'openKnowledge' },
+  },
 ]
 
 interface CommandPaletteProps {
@@ -148,6 +206,7 @@ interface CommandPaletteProps {
   onClose: () => void
   omnibarRef: React.RefObject<HTMLInputElement | null>
   onOpenSettings?: () => void
+  onOpenKnowledge?: () => void
 }
 
 export function CommandPalette({
@@ -155,6 +214,7 @@ export function CommandPalette({
   onClose,
   omnibarRef,
   onOpenSettings,
+  onOpenKnowledge,
 }: CommandPaletteProps) {
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState(0)
@@ -172,6 +232,25 @@ export function CommandPalette({
   const runAction = useCallback(
     async (action: CommandAction) => {
       switch (action.type) {
+        case 'switchMode':
+          setMode(action.mode)
+          break
+        case 'cycleSearchTarget': {
+          const targets: SearchTarget[] = ['all', 'web', 'vault', 'files', 'documents', 'history']
+          const current = useAppStore.getState().searchTarget
+          const nextIndex = (targets.indexOf(current) + 1) % targets.length
+          useAppStore.getState().setSearchTarget(targets[nextIndex])
+          break
+        }
+        case 'copyAnswer': {
+          const { mode, answer, researchReport } = useAppStore.getState()
+          const textToCopy = mode === 'research' ? researchReport : answer
+          if (textToCopy) void navigator.clipboard.writeText(textToCopy)
+          break
+        }
+        case 'openKnowledge':
+          onOpenKnowledge?.()
+          break
         case 'newChat':
           clearChat()
           setMode('chat')

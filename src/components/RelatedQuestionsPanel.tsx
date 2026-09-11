@@ -8,6 +8,7 @@ import { extendRetrievalContext } from '@/lib/retrieval-context'
 export function RelatedQuestionsPanel() {
   const relatedQuestions = useAppStore((s) => s.relatedQuestions)
   const relatedQuestionsLoading = useAppStore((s) => s.relatedQuestionsLoading)
+  const relatedQuestionsStatus = useAppStore((s) => s.relatedQuestionsStatus)
   const streamAnswer = useAppStore((s) => s.streamAnswer)
   const setMode = useAppStore((s) => s.setMode)
   const query = useAppStore((s) => s.query)
@@ -45,7 +46,16 @@ export function RelatedQuestionsPanel() {
     )
   }
 
-  if (relatedQuestions.length === 0) return null
+  if (relatedQuestions.length === 0) {
+    if (relatedQuestionsStatus === 'unavailable') {
+      return (
+        <div className="text-xs text-muted-foreground/60 italic px-1 py-0.5">
+          Follow-ups unavailable
+        </div>
+      )
+    }
+    return null
+  }
 
   return (
     <div className="flex flex-wrap gap-2">
