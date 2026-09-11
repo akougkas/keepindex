@@ -377,7 +377,7 @@ export function deriveDiscoveryQueries(
   // outranks the exact person. Preserve the user's query, then add bounded
   // biography/profile branches so first-party identity pages can compete
   // without assuming which same-named person was intended.
-  const personLookup = /^who\s+is\s+([\p{L}][\p{L}.'’\-]*(?:\s+[\p{L}][\p{L}.'’\-]*){1,3})\s*[?!.]*$/iu.exec(original)
+  const personLookup = /^(?:who|ho|whom)\s+is\s+([\p{L}][\p{L}.'’\-]*(?:\s+[\p{L}][\p{L}.'’\-]*){1,3})\s*[?!.]*$/iu.exec(original)
   if (personLookup) {
     const name = personLookup[1].trim()
     priorityVariants.push(`${name} official biography`, `${name} profile affiliation`)

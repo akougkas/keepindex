@@ -3724,7 +3724,11 @@ async function fetchDiscoverySearchResults(
   }
 
   const outcomes: Array<SearchResult[] | SearchFailure> = []
-  for (const query of boundedQueries) {
+  for (let i = 0; i < boundedQueries.length; i++) {
+    const query = boundedQueries[i]
+    if (i > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 300))
+    }
     const outcome = await fetchSearchResults(query, focus, countPerQuery, signal)
     outcomes.push(outcome)
     if (signal.aborted) break
