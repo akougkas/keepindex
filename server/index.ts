@@ -1,6 +1,7 @@
 import { unsupportedEvidenceLiterals, liveReleaseMismatch, releaseSourceExcerpts } from './evidence-validation'
 import { readCurrentProjectEvidence } from './project-evidence'
 import { InferenceModelLoadError, readModelLoadFailure } from './inference-failure'
+import { modelGenerationPolicy } from './generation-policy'
 import { AiConnections, describeAiConnection, aiConnectionsPath, defaultAiConnections, type ConnectionModel, type AiConnectionConfig } from './ai-connections'
 import { permitsLocalApiRequest, requireLocalSearchEndpoint } from './local-service-policy'
 import { Hono, type Context } from 'hono'
@@ -835,13 +836,6 @@ function isRetryableLlmStatus(status: number): boolean {
 function normalizeModel(model?: unknown): string {
   const candidate = typeof model === 'string' ? model.trim().replace(/[\u0000-\u001f\u007f]/g, '') : ''
   return candidate ? candidate.slice(0, 240) : ai().activeModel
-}
-
-function modelGenerationPolicy(model: string): { temperature: number; compactContext: boolean } {
-  const sizes = Array.from(model.toLowerCase().matchAll(/(?:^|[-_ ])(\d+(?:\.\d+)?)b(?:[-_ ]|$)/g), (match) => Number(match[1]))
-  const largestSize = sizes.length > 0 ? Math.max(...sizes) : null
-  const compactContext = largestSize != null && largestSize <= 14
-  return { temperature: compactContext ? 0.1 : 0.22, compactContext }
 }
 
 function inferReasoningModel(id: string, tags: string[]): boolean {

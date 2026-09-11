@@ -1,0 +1,500 @@
+[
+  {
+    "model": "Granite-4.2-3B-Q4_K_M",
+    "temperature": 1,
+    "status": "tested",
+    "weightsGiB": 2.0898986160755157,
+    "answerPass": 5,
+    "answerCount": 16,
+    "rankPass": 1,
+    "rankCount": 8,
+    "requiredFactRecall": 0.7678571428571429,
+    "requiredFactsWithSupportingCitations": 0.30357142857142855,
+    "rankPrecision": 0.875,
+    "rankRecall": 0.875,
+    "rankNdcg": 0.875,
+    "medianAnswerMs": 2074.2099749999998,
+    "p95AnswerMs": 26422.361531999995,
+    "medianFirstContentMs": 232.659126999999,
+    "medianTokensPerSecond": 57.444302961253825,
+    "medianRankMs": 411.12378900000476,
+    "longPack": [
+      {
+        "passed": false,
+        "elapsedMs": 26422.361531999995
+      },
+      {
+        "passed": false,
+        "elapsedMs": 26248.198390000005,
+        "finishReason": "length"
+      }
+    ],
+    "errors": 1,
+    "truncated": 2,
+    "fingerprint": "b10707-62acc89c2"
+  },
+  {
+    "model": "Granite-4.2-8B-Q4_K_M",
+    "temperature": 1,
+    "status": "tested",
+    "weightsGiB": 4.980636715888977,
+    "answerPass": 8,
+    "answerCount": 16,
+    "rankPass": 6,
+    "rankCount": 8,
+    "requiredFactRecall": 0.75,
+    "requiredFactsWithSupportingCitations": 0.5357142857142857,
+    "rankPrecision": 1,
+    "rankRecall": 1,
+    "rankNdcg": 1,
+    "medianAnswerMs": 3861.722366000002,
+    "p95AnswerMs": 54315.38407500001,
+    "medianFirstContentMs": 473.7014950000157,
+    "medianTokensPerSecond": 27.279516660629398,
+    "medianRankMs": 611.0747349999729,
+    "longPack": [
+      {
+        "passed": false,
+        "elapsedMs": 54315.38407500001,
+        "finishReason": "length"
+      },
+      {
+        "passed": false,
+        "elapsedMs": 52191.22124100005,
+        "finishReason": "length"
+      }
+    ],
+    "errors": 0,
+    "truncated": 4,
+    "fingerprint": "b10707-62acc89c2"
+  },
+  {
+    "model": "Qwen3.5-2B-Q4_K_M",
+    "temperature": 0.7,
+    "status": "tested",
+    "weightsGiB": 1.192871332168579,
+    "answerPass": 5,
+    "answerCount": 16,
+    "rankPass": 7,
+    "rankCount": 8,
+    "requiredFactRecall": 0.8571428571428571,
+    "requiredFactsWithSupportingCitations": 0.5714285714285714,
+    "rankPrecision": 1,
+    "rankRecall": 1,
+    "rankNdcg": 1,
+    "medianAnswerMs": 1876.117688999977,
+    "p95AnswerMs": 10043.542536999972,
+    "medianFirstContentMs": 476.7240739999688,
+    "medianTokensPerSecond": 48.38075231368678,
+    "medianRankMs": 549.4917300000088,
+    "longPack": [
+      {
+        "passed": false,
+        "elapsedMs": 10043.542536999972,
+        "finishReason": "stop"
+      },
+      {
+        "passed": false,
+        "elapsedMs": 6383.397132000013,
+        "finishReason": "stop"
+      }
+    ],
+    "errors": 0,
+    "truncated": 0,
+    "fingerprint": "b10707-62acc89c2"
+  },
+  {
+    "model": "Qwen3.5-4B-Q4_K_M",
+    "temperature": 0.7,
+    "status": "tested",
+    "weightsGiB": 2.552697330713272,
+    "answerPass": 12,
+    "answerCount": 16,
+    "rankPass": 8,
+    "rankCount": 8,
+    "requiredFactRecall": 0.8928571428571429,
+    "requiredFactsWithSupportingCitations": 0.75,
+    "rankPrecision": 1,
+    "rankRecall": 1,
+    "rankNdcg": 1,
+    "medianAnswerMs": 2707.762167000037,
+    "p95AnswerMs": 12638.336573000008,
+    "medianFirstContentMs": 803.1804419999826,
+    "medianTokensPerSecond": 28.780589834762605,
+    "medianRankMs": 665.6964639999787,
+    "longPack": [
+      {
+        "passed": false,
+        "elapsedMs": 12638.336573000008,
+        "finishReason": "stop"
+      },
+      {
+        "passed": false,
+        "elapsedMs": 8461.543548999995,
+        "finishReason": "stop"
+      }
+    ],
+    "errors": 0,
+    "truncated": 0,
+    "fingerprint": "b10707-62acc89c2"
+  },
+  {
+    "model": "Qwen3.5-9B-Q4_K_M",
+    "temperature": 0.7,
+    "status": "tested",
+    "weightsGiB": 5.290398806333542,
+    "answerPass": 11,
+    "answerCount": 16,
+    "rankPass": 8,
+    "rankCount": 8,
+    "requiredFactRecall": 0.8214285714285714,
+    "requiredFactsWithSupportingCitations": 0.6785714285714286,
+    "rankPrecision": 1,
+    "rankRecall": 1,
+    "rankNdcg": 1,
+    "medianAnswerMs": 3559.3815300000133,
+    "p95AnswerMs": 12019.165399999998,
+    "medianFirstContentMs": 656.6877289999975,
+    "medianTokensPerSecond": 25.665888969364318,
+    "medianRankMs": 781.9714239999885,
+    "longPack": [
+      {
+        "passed": false,
+        "elapsedMs": 12019.165399999998,
+        "finishReason": "stop"
+      },
+      {
+        "passed": false,
+        "elapsedMs": 11492.135855,
+        "finishReason": "stop"
+      }
+    ],
+    "errors": 0,
+    "truncated": 0,
+    "fingerprint": "b10707-62acc89c2"
+  },
+  {
+    "model": "Gemma-4-E2B-QAT",
+    "temperature": 1,
+    "status": "tested",
+    "weightsGiB": 2.4404106438159943,
+    "answerPass": 13,
+    "answerCount": 16,
+    "rankPass": 7,
+    "rankCount": 8,
+    "requiredFactRecall": 0.8571428571428571,
+    "requiredFactsWithSupportingCitations": 0.8571428571428571,
+    "rankPrecision": 0.875,
+    "rankRecall": 0.875,
+    "rankNdcg": 0.875,
+    "medianAnswerMs": 658.8775499999756,
+    "p95AnswerMs": 3062.6634749999503,
+    "medianFirstContentMs": 198.80478199990466,
+    "medianTokensPerSecond": 88.11866647084742,
+    "medianRankMs": 235.1484530000016,
+    "longPack": [
+      {
+        "passed": false,
+        "elapsedMs": 3062.6634749999503,
+        "finishReason": "stop"
+      },
+      {
+        "passed": false,
+        "elapsedMs": 3053.2750910000177,
+        "finishReason": "stop"
+      }
+    ],
+    "errors": 0,
+    "truncated": 0,
+    "fingerprint": "b10707-62acc89c2"
+  },
+  {
+    "model": "Gemma-4-E4B-QAT",
+    "temperature": 1,
+    "status": "tested",
+    "weightsGiB": 3.9261726438999176,
+    "answerPass": 13,
+    "answerCount": 16,
+    "rankPass": 8,
+    "rankCount": 8,
+    "requiredFactRecall": 0.8571428571428571,
+    "requiredFactsWithSupportingCitations": 0.8214285714285714,
+    "rankPrecision": 1,
+    "rankRecall": 1,
+    "rankNdcg": 1,
+    "medianAnswerMs": 1412.8245359999128,
+    "p95AnswerMs": 7054.846805999987,
+    "medianFirstContentMs": 331.3726510000415,
+    "medianTokensPerSecond": 54.066202474747904,
+    "medianRankMs": 393.2637269999832,
+    "longPack": [
+      {
+        "passed": false,
+        "elapsedMs": 5805.470840000082,
+        "finishReason": "stop"
+      },
+      {
+        "passed": false,
+        "elapsedMs": 7054.846805999987,
+        "finishReason": "stop"
+      }
+    ],
+    "errors": 0,
+    "truncated": 0,
+    "fingerprint": "b10707-62acc89c2"
+  },
+  {
+    "model": "Gemma-4-E4B-it-GGUF",
+    "temperature": 1,
+    "status": "tested",
+    "weightsGiB": 4.635352253913879,
+    "answerPass": 10,
+    "answerCount": 16,
+    "rankPass": 8,
+    "rankCount": 8,
+    "requiredFactRecall": 0.8214285714285714,
+    "requiredFactsWithSupportingCitations": 0.7142857142857143,
+    "rankPrecision": 1,
+    "rankRecall": 1,
+    "rankNdcg": 1,
+    "medianAnswerMs": 1862.7338299999246,
+    "p95AnswerMs": 7341.444867999991,
+    "medianFirstContentMs": 413.5869240000611,
+    "medianTokensPerSecond": 42.597483414762436,
+    "medianRankMs": 466.3367680000374,
+    "longPack": [
+      {
+        "passed": false,
+        "elapsedMs": 6346.824352000025,
+        "finishReason": "stop"
+      },
+      {
+        "passed": false,
+        "elapsedMs": 7341.444867999991,
+        "finishReason": "stop"
+      }
+    ],
+    "errors": 0,
+    "truncated": 0,
+    "fingerprint": "b10707-62acc89c2"
+  },
+  {
+    "model": "Gemma-4-26B-A4B-it-MTP-GGUF",
+    "temperature": 1,
+    "status": "tested",
+    "weightsGiB": 15.783628195524216,
+    "answerPass": 14,
+    "answerCount": 16,
+    "rankPass": 8,
+    "rankCount": 8,
+    "requiredFactRecall": 0.9285714285714286,
+    "requiredFactsWithSupportingCitations": 0.8571428571428571,
+    "rankPrecision": 1,
+    "rankRecall": 1,
+    "rankNdcg": 1,
+    "medianAnswerMs": 1601.027817999944,
+    "p95AnswerMs": 28583.807244999916,
+    "medianFirstContentMs": 875.2403049999848,
+    "medianTokensPerSecond": 60.97319815959817,
+    "medianRankMs": 930.528301000013,
+    "longPack": [
+      {
+        "passed": false,
+        "elapsedMs": 28583.807244999916,
+        "finishReason": "length"
+      },
+      {
+        "passed": false,
+        "elapsedMs": 11176.88435399998,
+        "finishReason": "stop"
+      }
+    ],
+    "errors": 0,
+    "truncated": 1,
+    "fingerprint": "b10707-62acc89c2"
+  },
+  {
+    "model": "Qwen3.8-27B-GGUF",
+    "temperature": 0.7,
+    "status": "stalled",
+    "weightsGiB": 16.35325899720192,
+    "answerPass": 7,
+    "answerCount": 8,
+    "rankPass": 0,
+    "rankCount": 1,
+    "requiredFactRecall": 0.8571428571428571,
+    "requiredFactsWithSupportingCitations": 0.8571428571428571,
+    "rankPrecision": 0,
+    "rankRecall": 0,
+    "rankNdcg": 0,
+    "medianAnswerMs": 5866.786777999951,
+    "p95AnswerMs": 93669.56993300002,
+    "medianFirstContentMs": 1964.5707809999585,
+    "medianTokensPerSecond": 9.081677153279275,
+    "medianRankMs": 93719.51289300004,
+    "longPack": [
+      {
+        "passed": false,
+        "elapsedMs": 93669.56993300002
+      }
+    ],
+    "errors": 2,
+    "truncated": 0,
+    "fingerprint": "b10707-62acc89c2"
+  },
+  {
+    "model": "Context-1-20B-Q4_K_M",
+    "temperature": 1,
+    "status": "tested",
+    "weightsGiB": 14.719679057598114,
+    "answerPass": 12,
+    "answerCount": 16,
+    "rankPass": 8,
+    "rankCount": 8,
+    "requiredFactRecall": 0.9285714285714286,
+    "requiredFactsWithSupportingCitations": 0.7857142857142857,
+    "rankPrecision": 1,
+    "rankRecall": 1,
+    "rankNdcg": 1,
+    "medianAnswerMs": 4106.007993999985,
+    "p95AnswerMs": 15019.849029000005,
+    "medianFirstContentMs": 2876.2594150000077,
+    "medianTokensPerSecond": 54.05716704406578,
+    "medianRankMs": 3466.7818909999914,
+    "longPack": [
+      {
+        "passed": false,
+        "elapsedMs": 15019.849029000005,
+        "finishReason": "stop"
+      },
+      {
+        "passed": false,
+        "elapsedMs": 12289.35412600002,
+        "finishReason": "stop"
+      }
+    ],
+    "errors": 0,
+    "truncated": 0,
+    "fingerprint": "b10707-62acc89c2"
+  },
+  {
+    "model": "Granite-4.2-3B-Q4_K_M",
+    "temperature": 0.1,
+    "status": "tested",
+    "weightsGiB": 2.0898986160755157,
+    "answerPass": 8,
+    "answerCount": 24,
+    "rankPass": 0,
+    "rankCount": 12,
+    "requiredFactRecall": 0.7738095238095238,
+    "requiredFactsWithSupportingCitations": 0.5119047619047619,
+    "rankPrecision": 1,
+    "rankRecall": 1,
+    "rankNdcg": 1,
+    "medianAnswerMs": 2504.7467370000086,
+    "p95AnswerMs": 25752.746847000002,
+    "medianFirstContentMs": 214.35000700000091,
+    "medianTokensPerSecond": 59.66586062019758,
+    "medianRankMs": 263.114001000009,
+    "longPack": [
+      {
+        "passed": false,
+        "elapsedMs": 25752.746847000002,
+        "finishReason": "length"
+      },
+      {
+        "passed": false,
+        "elapsedMs": 25835.512268000006,
+        "finishReason": "length"
+      },
+      {
+        "passed": false,
+        "elapsedMs": 25725.915569999983,
+        "finishReason": "length"
+      }
+    ],
+    "errors": 0,
+    "truncated": 6,
+    "fingerprint": "b10707-62acc89c2"
+  },
+  {
+    "model": "Gemma-4-E2B-QAT",
+    "temperature": 0.1,
+    "status": "tested",
+    "weightsGiB": 2.4404106438159943,
+    "answerPass": 18,
+    "answerCount": 24,
+    "rankPass": 12,
+    "rankCount": 12,
+    "requiredFactRecall": 0.7142857142857143,
+    "requiredFactsWithSupportingCitations": 0.7142857142857143,
+    "rankPrecision": 1,
+    "rankRecall": 1,
+    "rankNdcg": 1,
+    "medianAnswerMs": 768.6491870000027,
+    "p95AnswerMs": 3048.977159000002,
+    "medianFirstContentMs": 190.4026179999928,
+    "medianTokensPerSecond": 90.91123359809828,
+    "medianRankMs": 226.4898739999917,
+    "longPack": [
+      {
+        "passed": false,
+        "elapsedMs": 3048.977159000002,
+        "finishReason": "stop"
+      },
+      {
+        "passed": false,
+        "elapsedMs": 3061.7855810000037,
+        "finishReason": "stop"
+      },
+      {
+        "passed": false,
+        "elapsedMs": 3037.958741999988,
+        "finishReason": "stop"
+      }
+    ],
+    "errors": 0,
+    "truncated": 0,
+    "fingerprint": "b10707-62acc89c2"
+  },
+  {
+    "model": "Gemma-4-E4B-QAT",
+    "temperature": 0.1,
+    "status": "tested",
+    "weightsGiB": 3.9261726438999176,
+    "answerPass": 15,
+    "answerCount": 24,
+    "rankPass": 12,
+    "rankCount": 12,
+    "requiredFactRecall": 0.8333333333333334,
+    "requiredFactsWithSupportingCitations": 0.7857142857142857,
+    "rankPrecision": 1,
+    "rankRecall": 1,
+    "rankNdcg": 1,
+    "medianAnswerMs": 1069.7756579999987,
+    "p95AnswerMs": 5851.77582900002,
+    "medianFirstContentMs": 323.26162699999986,
+    "medianTokensPerSecond": 54.244301194636115,
+    "medianRankMs": 400.81437800001004,
+    "longPack": [
+      {
+        "passed": false,
+        "elapsedMs": 5288.085784000024,
+        "finishReason": "stop"
+      },
+      {
+        "passed": false,
+        "elapsedMs": 6701.468666999979,
+        "finishReason": "stop"
+      },
+      {
+        "passed": false,
+        "elapsedMs": 5851.77582900002,
+        "finishReason": "stop"
+      }
+    ],
+    "errors": 0,
+    "truncated": 0,
+    "fingerprint": "b10707-62acc89c2"
+  }
+]

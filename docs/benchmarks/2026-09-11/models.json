@@ -1,0 +1,129 @@
+{
+  "date": "2026-09-11",
+  "selection": "Current small Gemma, Granite, Qwen models plus installed larger baselines and Chroma Context-1. Not an exhaustive Hugging Face census.",
+  "models": [
+    {
+      "id": "Granite-4.2-3B-Q4_K_M",
+      "repository": "ibm-granite/granite-4.2-3b-GGUF",
+      "revision": "c40945d71cd90f249a56985e8155551a9188dc30",
+      "file": "granite-4.2-3b-Q4_K_M.gguf",
+      "sizeBytes": 2244011552,
+      "sha256": "e0406663965846ae22a403456eb826ccce5f450840491f71952f18a7cb78e7d5",
+      "temperature": 1.0,
+      "purpose": "answer synthesis and document selection",
+      "verifiedLocalSha256": "e0406663965846ae22a403456eb826ccce5f450840491f71952f18a7cb78e7d5"
+    },
+    {
+      "id": "Granite-4.2-8B-Q4_K_M",
+      "repository": "ibm-granite/granite-4.2-8b-GGUF",
+      "revision": "93f3f6a8938ee922b784cf4e5b4203cd3428df8f",
+      "file": "granite-4.2-8b-Q4_K_M.gguf",
+      "sizeBytes": 5347917952,
+      "sha256": "16a9369d0805f80b7377d25d87f937a90c05dc04ad79173a52001e42c9aab311",
+      "temperature": 1.0,
+      "purpose": "answer synthesis and document selection",
+      "verifiedLocalSha256": "16a9369d0805f80b7377d25d87f937a90c05dc04ad79173a52001e42c9aab311"
+    },
+    {
+      "id": "Qwen3.5-2B-Q4_K_M",
+      "repository": "unsloth/Qwen3.5-2B-GGUF",
+      "revision": "f6d5376be1edb4d416d56da11e5397a961aca8ae",
+      "file": "Qwen3.5-2B-Q4_K_M.gguf",
+      "sizeBytes": 1280835840,
+      "sha256": "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
+      "temperature": 0.7,
+      "purpose": "answer synthesis and document selection",
+      "verifiedLocalSha256": "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223"
+    },
+    {
+      "id": "Qwen3.5-4B-Q4_K_M",
+      "repository": "unsloth/Qwen3.5-4B-GGUF",
+      "revision": "e87f176479d0855a907a41277aca2f8ee7a09523",
+      "file": "Qwen3.5-4B-Q4_K_M.gguf",
+      "sizeBytes": 2740937888,
+      "sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+      "temperature": 0.7,
+      "purpose": "answer synthesis and document selection",
+      "verifiedLocalSha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4"
+    },
+    {
+      "id": "Qwen3.5-9B-Q4_K_M",
+      "repository": "unsloth/Qwen3.5-9B-GGUF",
+      "revision": "3885219b6810b007914f3a7950a8d1b469d598a5",
+      "file": "Qwen3.5-9B-Q4_K_M.gguf",
+      "sizeBytes": 5680522464,
+      "sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+      "temperature": 0.7,
+      "purpose": "answer synthesis and document selection",
+      "verifiedLocalSha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8"
+    },
+    {
+      "id": "Gemma-4-E2B-QAT",
+      "repository": "unsloth/gemma-4-E2B-it-qat-GGUF",
+      "revision": "66a399f68ddd113b06dff02fca9523e55465d11d",
+      "file": "gemma-4-E2B-it-qat-UD-Q4_K_XL.gguf",
+      "sizeBytes": 2620370976,
+      "sha256": "e531007218dfab990486a5de7676a6932d6ea8dea233d1f698d7c21cf8a16889",
+      "temperature": 1.0,
+      "purpose": "answer synthesis and document selection",
+      "verifiedLocalSha256": "e531007218dfab990486a5de7676a6932d6ea8dea233d1f698d7c21cf8a16889"
+    },
+    {
+      "id": "Gemma-4-E4B-QAT",
+      "repository": "unsloth/gemma-4-E4B-it-qat-GGUF",
+      "revision": "8c5a9e4fd5482e2be20fe0bf013b4c262a8f4265",
+      "file": "gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf",
+      "sizeBytes": 4215695776,
+      "sha256": "df0fd4ee07072c607c29a0a1cb4f98918426cca12f45a2776bdd6ee6d09a4de3",
+      "temperature": 1.0,
+      "purpose": "answer synthesis and document selection",
+      "verifiedLocalSha256": "df0fd4ee07072c607c29a0a1cb4f98918426cca12f45a2776bdd6ee6d09a4de3"
+    },
+    {
+      "id": "Context-1-20B-Q4_K_M",
+      "repository": "nicolasembleton/context-1-GGUF",
+      "revision": "4d4506d8785d2601502ffaadd39300cd766a06ba",
+      "file": "context-1-Q4_K_M.gguf",
+      "sizeBytes": 15805135040,
+      "sha256": "ae52c71c84f782a7b0162eef0f0ce0608cfbfe4fc998e714936000c3ba45c755",
+      "temperature": 1.0,
+      "purpose": "retrieval-specialist compatibility and selection proxy",
+      "reasoningEffort": "low",
+      "verifiedLocalSha256": "ae52c71c84f782a7b0162eef0f0ce0608cfbfe4fc998e714936000c3ba45c755"
+    },
+    {
+      "id": "Gemma-4-E4B-it-GGUF",
+      "repository": "unsloth/gemma-4-E4B-it-GGUF",
+      "revision": "bfc15c382204943c3a8fff0c750b94ae2364d7a3",
+      "file": "gemma-4-E4B-it-Q4_K_M.gguf",
+      "sizeBytes": 4977171584,
+      "sha256": "85a896a047553e842f25297ee5b031d64ff30147d9c4af17b1e4b394cd1fab87",
+      "temperature": 1.0,
+      "purpose": "answer synthesis and document selection",
+      "verifiedLocalSha256": "85a896a047553e842f25297ee5b031d64ff30147d9c4af17b1e4b394cd1fab87"
+    },
+    {
+      "id": "Gemma-4-26B-A4B-it-MTP-GGUF",
+      "repository": "unsloth/gemma-4-26B-A4B-it-GGUF",
+      "revision": "c099eb48e663fd284577b04978a94ffccb261841",
+      "file": "gemma-4-26B-A4B-it-UD-Q4_K_M.gguf",
+      "sizeBytes": 16947541728,
+      "sha256": "f2c28b3dc4776931ac6f879e11f203dec637ea0f14267a86ec8f6165f63f293f",
+      "temperature": 1.0,
+      "purpose": "answer synthesis and document selection",
+      "args": "--spec-type draft-mtp --spec-draft-n-max 2",
+      "verifiedLocalSha256": "f2c28b3dc4776931ac6f879e11f203dec637ea0f14267a86ec8f6165f63f293f"
+    },
+    {
+      "id": "Qwen3.8-27B-GGUF",
+      "repository": "unsloth/Qwen3.8-27B-GGUF",
+      "revision": "4ca720788d1e01f1bff70c033e0d0028fd02e502",
+      "file": "Qwen3.8-27B-UD-Q4_K_XL.gguf",
+      "sizeBytes": 17559178144,
+      "sha256": "3f227079003add2511437e5b1e94812e363385225bf6a9b47b0054a72bc8b01e",
+      "temperature": 0.7,
+      "purpose": "answer synthesis and document selection",
+      "verifiedLocalSha256": "3f227079003add2511437e5b1e94812e363385225bf6a9b47b0054a72bc8b01e"
+    }
+  ]
+}

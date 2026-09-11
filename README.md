@@ -142,6 +142,11 @@ bun run dev
 
 The native CLI supports `bun run keepidx doctor`, `status`, `status --json`, `open`, and `start --detach`. It checks the environment in which it runs; a host CLI cannot inspect Docker's internal database mount or resolve every Docker-only hostname. For the exact running stack, inspect `docker compose ps` and `curl -fsS http://localhost:5173/api/health`.
 
+The [ZBook model comparison](docs/benchmarks/2026-09-11/README.md) records exact
+Hugging Face weights, Lemonade configurations, cited-answer and document-selection
+results, latency measurements, and known failures. It includes a reproducible
+synthetic corpus; its model timings are separate from full-product retrieval.
+
 ```bash
 bun run test
 bun run typecheck

@@ -31,7 +31,7 @@ An advertised model is a catalog entry, not a successful inference test. If an e
 
 ## DiffusionGemma compatibility
 
-As tested on ZBook on September 11, 2026, **Lemonade 11.9.0 cannot serve the installed DiffusionGemma GGUF through its current llama.cpp backend**. Its public chat API returns HTTP 500 with `model_load_error`. Its bundled ROCm `llama-diffusion-cli` also rejects the weights with `unknown model architecture: 'diffusion-gemma'`. That binary's name does not establish support for this particular diffusion architecture. The existing weights are present; another download or a different KeepIndex URL does not repair the runtime.
+As tested on ZBook on September 11, 2026, **Lemonade 11.9.0 could not serve the tested DiffusionGemma GGUF through its current llama.cpp backend**. Its public chat API returned HTTP 500 with `model_load_error`. Its bundled ROCm `llama-diffusion-cli` also rejected the weights with `unknown model architecture: 'diffusion-gemma'`. That binary's name does not establish support for this particular diffusion architecture. The model and its weights were subsequently removed through Lemonade's model manager at the user's request; changing the KeepIndex URL would not repair that runtime incompatibility.
 
 DiffusionGemma generates blocks of tokens through a diffusion process. It needs explicit runtime support beyond ordinary Gemma 4 autoregressive inference. The [Unsloth model card](https://huggingface.co/unsloth/diffusiongemma-26B-A4B-it-GGUF) documents a dedicated diffusion runner from [llama.cpp PR #24423](https://github.com/ggml-org/llama.cpp/pull/24423). At the time of testing, that work and the [separate experimental HTTP server in PR #24427](https://github.com/ggml-org/llama.cpp/pull/24427) remain unmerged. [Lemonade issue #2531](https://github.com/lemonade-sdk/lemonade/issues/2531) tracks the model-load problem; [PR #2179](https://github.com/lemonade-sdk/lemonade/pull/2179) adds a model catalog entry rather than a diffusion inference backend.
 
@@ -66,3 +66,10 @@ Select a model that fits your hardware. Stop or start models using the runtime's
 ## Current ZBook installation
 
 ZBook uses Lemonade's **public API on port 13305**, with its existing model catalog. Port 8001/8002 llama.cpp workers and Hugging Face cache-file paths are implementation details of that runtime, not KeepIndex connections. Blade AI Gateway is an additional authenticated connection. LM Studio, Ollama, and standalone llama.cpp are checked at their public local APIs and may be unavailable until started. The application, sources, local index, and SearXNG stay on ZBook; Blade also hosts the separate static product website.
+
+The [September 11 model comparison](benchmarks/2026-09-11/README.md) includes
+Gemma 4 QAT, Granite 4.2, small Qwen 3.5 models, existing larger baselines, and
+Chroma Context-1. It records 357 trials and exact verified GGUF identities.
+Context-1 runs through this Lemonade installation, but its intended role is
+agentic retrieval; it is not automatically used as KeepIndex's answer model.
+Gemma's E2B/E4B names now receive the existing compact-model answer budgets.

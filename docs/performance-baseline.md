@@ -104,3 +104,25 @@ Override `KEEPINDEX_URL`, `KEEPINDEX_PROFILE_OUTPUT`, or
 `KEEPINDEX_PROFILE_QUERIES` (a JSON array containing at least ten strings) when
 needed. Runs are sequential by design so the baseline represents one interactive
 user rather than a concurrency stress test.
+
+## September 11 source-refresh observation
+
+During the separate Lemonade model comparison, a local-only question retrieved
+older KeepIndex documentation from the `projects` resource. The resource was
+marked refresh due. Refreshing it through the existing indexing API took 47.07
+seconds and indexed 83,010 chunks from 7,105 files, with no unreadable files.
+The resource remained capped: the configured combined limits are 16,000 files
+and 160,000 chunks. A refresh updates the admitted subset; it does not establish
+complete coverage of every folder under a capped resource.
+
+The following local query stalled before a response, and a separate health
+request exceeded a five-second timeout. Docker reported about 284% CPU and
+9.03 GiB for the application container. Restarting that container restored a
+health score of 100. This reproduced an operational problem; the precise cause
+was not isolated, and restarting is recovery rather than a performance fix.
+
+Direct model benchmark requests bypass KeepIndex's index. Their inference
+latencies must not be presented as full-product query latencies. Evaluate
+index refresh, memory, event-loop responsiveness, and local retrieval separately
+before selecting SQLite FTS, another embedded index, or an OpenSearch service
+as a replacement for the current in-memory candidate search.
